@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Plataforma de Faturas de Energia · Lério &amp; Silva</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="topbar">
+  <div class="inner">
+    <div class="meta">
+      <span>Rua Lydia Ferrari Magnoli, 108 — São Paulo, SP</span>
+      <span>contato@leriosilva.com.br</span>
+    </div>
+    <div class="tag">Contabilidade estratégica • Gestão de faturas</div>
+  </div>
+</div>
+
+<section class="hero">
+  <div class="inner">
+    <div class="brand">
+      <div class="brand-mark">LS</div>
+      <div class="brand-text">
+        <h1>Lério &amp; Silva</h1>
+        <p>Contabilidade Estratégica</p>
+      </div>
+    </div>
+    <div class="hero-copy">
+      <h2>Plataforma unificada de faturas de energia</h2>
+      <p>Cadastre titulares, organize instalações, importe planilhas e acompanhe consumo, custos e saldo de energia em um único painel.</p>
+    </div>
+  </div>
+</section>
+
+<div class="main">
+  <div class="panel">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="titulares">Titulares</button>
+      <button class="tab-btn" data-tab="instalacoes">Instalações</button>
+      <button class="tab-btn" data-tab="upload">Upload de Excel</button>
+      <button class="tab-btn" data-tab="analise">Análise</button>
+    </div>
+
+    <!-- ===================== TITULARES ===================== -->
+    <section id="titulares" class="tab-pane active">
+      <div class="section-title"><h2>Titulares de contas</h2></div>
+      <p class="subtitle">Cada titular pode ter várias instalações (unidades consumidoras) vinculadas.</p>
+
+      <div class="toolbar">
+        <div class="grow">
+          <input id="buscaTitular" placeholder="Buscar por nome ou documento…" />
+        </div>
+        <button id="novoTitularBtn">+ Novo titular</button>
+      </div>
+
+      <div id="titularesGrid" class="grid cols-3"></div>
+      <div id="titularesVazio" class="empty">Nenhum titular cadastrado ainda.</div>
+    </section>
+
+    <!-- ===================== INSTALAÇÕES ===================== -->
+    <section id="instalacoes" class="tab-pane">
+      <div class="section-title"><h2>Instalações</h2></div>
+      <p class="subtitle">Unidades consumidoras (UCs) por titular. O código corresponde ao número da instalação na fatura.</p>
+
+      <div class="toolbar">
+        <div class="grow">
+          <label>Filtrar por titular</label>
+          <select id="filtroTitularInst"><option value="">Todos os titulares</option></select>
+        </div>
+        <button id="novaInstalacaoBtn">+ Nova instalação</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Titular</th><th>Código (UC)</th><th>Apelido</th><th>Distribuidora</th><th>Endereço</th><th>Faturas</th><th></th>
+          </tr></thead>
+          <tbody id="instalacoesBody"><tr><td colspan="7" class="empty">Nenhuma instalação cadastrada.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===================== UPLOAD EXCEL ===================== -->
+    <section id="upload" class="tab-pane">
+      <div class="section-title"><h2>Upload de planilha Excel</h2></div>
+      <p class="subtitle">Importe um arquivo <strong>.xlsx</strong>, <strong>.xls</strong> ou <strong>.csv</strong> com as faturas. As instalações são criadas/atualizadas automaticamente.</p>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <div class="field">
+            <label>Vincular faturas ao titular</label>
+            <select id="uploadTitular">
+              <option value="">— Usar a coluna “Titular” da planilha —</option>
+            </select>
+            <div class="note">Se você selecionar um titular aqui, todas as linhas vão para ele. Caso contrário, o sistema usa a coluna <strong>Titular</strong> do arquivo (criando o titular se não existir).</div>
+          </div>
+
+          <div class="drop" id="excelDrop">
+            <strong>Arraste a planilha aqui ou clique para selecionar</strong>
+            <span class="small">Formatos aceitos: .xlsx, .xls, .csv</span>
+            <input type="file" id="excelInput" accept=".xlsx,.xls,.csv" style="display:none" />
+          </div>
+
+          <div class="row-actions" style="margin-top:14px">
+            <button id="enviarExcelBtn" disabled>Importar planilha</button>
+            <button id="baixarTemplateBtn" class="secondary">Baixar modelo (.xlsx)</button>
+          </div>
+          <div class="status" id="uploadStatus">Aguardando arquivo…</div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 6px; font-size:18px; color:var(--navy)">Layout esperado da planilha</h3>
+          <p class="small">A primeira linha deve conter os cabeçalhos abaixo. Os nomes toleram acentos e maiúsculas/minúsculas. Colunas em destaque são essenciais.</p>
+          <div class="cols-tpl">
+            <span class="col-chip req">Titular*</span>
+            <span class="col-chip req">Instalação*</span>
+            <span class="col-chip req">Mês*</span>
+            <span class="col-chip">Apelido</span>
+            <span class="col-chip">Leitura Atual</span>
+            <span class="col-chip">Vencimento</span>
+            <span class="col-chip">Consumo Faturado (kWh)</span>
+            <span class="col-chip"># Dias</span>
+            <span class="col-chip">Total a pagar</span>
+            <span class="col-chip">Bandeira</span>
+            <span class="col-chip">Saldo atualizado de energia em kWh</span>
+            <span class="col-chip">Energia injetada no mês em kWh</span>
+            <span class="col-chip">Status</span>
+          </div>
+          <div class="note">
+            • <strong>Mês</strong> aceita <code>MM/AAAA</code> (ex.: 01/2025) ou <code>MMM/AA</code> (ex.: JAN/25).<br>
+            • <strong>Titular*</strong> é obrigatório apenas se você não escolher um titular no seletor ao lado.<br>
+            • Valores monetários e numéricos aceitam o formato brasileiro (1.234,56).<br>
+            • Faturas com mesmo titular + instalação + mês são <strong>atualizadas</strong> (não duplicam).
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== ANÁLISE ===================== -->
+    <section id="analise" class="tab-pane">
+      <div class="section-title"><h2>Painel analítico</h2></div>
+      <p class="subtitle">Indicadores consolidados a partir das faturas armazenadas.</p>
+
+      <div class="toolbar">
+        <div style="min-width:200px"><label>Titular</label><select id="fTitular"><option value="">Todos</option></select></div>
+        <div style="min-width:200px"><label>Instalação</label><select id="fInstalacao"><option value="">Todas</option></select></div>
+        <div style="min-width:130px"><label>Ano</label><select id="fAno"><option value="">Todos</option></select></div>
+        <div style="min-width:140px"><label>Bandeira</label><select id="fBandeira"><option value="">Todas</option></select></div>
+        <button id="recarregarBtn" class="secondary">Recarregar</button>
+        <button id="exportResumoBtn" class="secondary" disabled>Exportar resumo (.xlsx)</button>
+      </div>
+
+      <div class="status" id="analiseStatus">Carregando dados…</div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="label">Total de faturas</div><div class="value" id="kpiFaturas">0</div><div class="sub">Registros filtrados</div></div>
+        <div class="kpi"><div class="label">Consumo total</div><div class="value" id="kpiConsumo">0 kWh</div><div class="sub">Soma do período</div></div>
+        <div class="kpi"><div class="label">Total pago</div><div class="value" id="kpiTotal">R$ 0,00</div><div class="sub">Soma do período</div></div>
+        <div class="kpi"><div class="label">Custo médio/kWh</div><div class="value" id="kpiCusto">R$ 0,00</div><div class="sub">Total pago / consumo</div></div>
+        <div class="kpi"><div class="label">Saldo final de energia</div><div class="value" id="kpiSaldo">0 kWh</div><div class="sub">Último saldo por instalação</div></div>
+      </div>
+
+      <div class="block">
+        <h3>Dashboard mês a mês</h3>
+        <div class="grid cols-2">
+          <div class="chart-box"><h4>Consumo faturado (kWh)</h4><div class="chart-wrap"><canvas id="cConsumo"></canvas></div></div>
+          <div class="chart-box"><h4>Total a pagar (R$)</h4><div class="chart-wrap"><canvas id="cValor"></canvas></div></div>
+        </div>
+        <div class="grid cols-2" style="margin-top:16px">
+          <div class="chart-box"><h4>Custo por kWh (R$)</h4><div class="chart-wrap"><canvas id="cCusto"></canvas></div></div>
+          <div class="chart-box"><h4>Saldo × Energia injetada (kWh)</h4><div class="chart-wrap"><canvas id="cSaldo"></canvas></div></div>
+        </div>
+      </div>
+
+      <div class="block">
+        <h3>Consolidação por instalação</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Titular</th><th>Instalação</th><th>Qtd. faturas</th><th>Consumo total (kWh)</th><th>Total pago</th><th>Custo médio/kWh</th><th>Saldo final</th><th>Injetada total</th>
+            </tr></thead>
+            <tbody id="consolidadoBody"><tr><td colspan="8" class="empty">Sem dados.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="block">
+        <h3>Tabela analítica</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Titular</th><th>Instalação</th><th>Mês</th><th>Vencimento</th><th>Consumo (kWh)</th><th># Dias</th><th>Total</th><th>Custo/kWh</th><th>Bandeira</th><th>Saldo</th><th>Injetada</th><th>Status</th>
+            </tr></thead>
+            <tbody id="analiticaBody"><tr><td colspan="12" class="empty">Sem dados.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- Modais -->
+<div class="modal-bg" id="modalTitular">
+  <div class="modal">
+    <h3 id="modalTitularTitle">Novo titular</h3>
+    <input type="hidden" id="titularId" />
+    <div class="field"><label>Nome / Razão social *</label><input id="tNome" /></div>
+    <div class="grid cols-2">
+      <div class="field"><label>Documento (CPF/CNPJ)</label><input id="tDoc" /></div>
+      <div class="field"><label>Telefone</label><input id="tTel" /></div>
+    </div>
+    <div class="field"><label>E-mail</label><input id="tEmail" /></div>
+    <div class="field"><label>Observações</label><textarea id="tObs" rows="2"></textarea></div>
+    <div class="modal-actions">
+      <button class="secondary" data-close>Cancelar</button>
+      <button id="salvarTitularBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalInstalacao">
+  <div class="modal">
+    <h3 id="modalInstTitle">Nova instalação</h3>
+    <input type="hidden" id="instId" />
+    <div class="field"><label>Titular *</label><select id="iTitular"></select></div>
+    <div class="grid cols-2">
+      <div class="field"><label>Código (UC) *</label><input id="iCodigo" /></div>
+      <div class="field"><label>Apelido</label><input id="iApelido" /></div>
+    </div>
+    <div class="field"><label>Distribuidora</label><input id="iDist" /></div>
+    <div class="field"><label>Endereço</label><input id="iEnd" /></div>
+    <div class="modal-actions">
+      <button class="secondary" data-close>Cancelar</button>
+      <button id="salvarInstBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
