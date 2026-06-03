@@ -104,6 +104,7 @@ A primeira linha do Excel deve conter os cabeçalhos abaixo (acentos e maiúscul
 |---|---|---|
 | GET/POST | `/api/titulares` | Listar / criar titulares |
 | PUT/DELETE | `/api/titulares/:id` | Editar / excluir titular |
+| POST | `/api/titulares/merge` | Unificar titulares (`{destino_id, origem_ids:[...]}`) |
 | GET/POST | `/api/instalacoes` | Listar (`?titular_id=`) / criar instalação |
 | PUT/DELETE | `/api/instalacoes/:id` | Editar / excluir instalação |
 | GET | `/api/faturas` | Listar faturas (`?titular_id=1,2` `&instalacao_id=5,6` — aceita múltiplos) |
