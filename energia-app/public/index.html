@@ -93,21 +93,40 @@
       <div class="grid cols-2">
         <div class="card">
           <div class="field">
+            <label>Fonte dos dados</label>
+            <div class="seg" id="segFonte">
+              <button type="button" class="seg-btn active" data-fonte="excel">Planilha Excel</button>
+              <button type="button" class="seg-btn" data-fonte="pdf">Arquivos PDF</button>
+            </div>
+          </div>
+
+          <div class="field">
             <label>Vincular faturas ao titular</label>
             <select id="uploadTitular">
               <option value="">— Usar a coluna “Titular” da planilha —</option>
             </select>
-            <div class="note">Se você selecionar um titular aqui, todas as linhas vão para ele. Caso contrário, o sistema usa a coluna <strong>Titular</strong> do arquivo (criando o titular se não existir).</div>
+            <div class="note">Se você selecionar um titular aqui, todas as faturas vão para ele. Caso contrário, o sistema usa o <strong>titular</strong> identificado no próprio arquivo (criando-o se não existir; quando não houver, usa “(Sem titular)”).</div>
           </div>
 
-          <div class="drop" id="excelDrop">
-            <strong>Arraste a planilha aqui ou clique para selecionar</strong>
-            <span class="small">Formatos aceitos: .xlsx, .xls, .csv</span>
-            <input type="file" id="excelInput" accept=".xlsx,.xls,.csv" style="display:none" />
+          <div id="fonteExcel">
+            <div class="drop" id="excelDrop">
+              <strong>Arraste a planilha aqui ou clique para selecionar</strong>
+              <span class="small">Formatos aceitos: .xlsx, .xls, .csv</span>
+              <input type="file" id="excelInput" accept=".xlsx,.xls,.csv" style="display:none" />
+            </div>
+          </div>
+
+          <div id="fontePdf" style="display:none">
+            <div class="drop" id="pdfDrop">
+              <strong>Arraste os PDFs aqui ou clique para selecionar</strong>
+              <span class="small">Faturas em .pdf (Enel SP ou Energisa) — vários arquivos de uma vez</span>
+              <input type="file" id="pdfInput" accept=".pdf" multiple style="display:none" />
+            </div>
+            <div id="pdfLista" class="pdf-lista"></div>
           </div>
 
           <div class="row-actions" style="margin-top:14px">
-            <button id="enviarExcelBtn" disabled>Importar planilha</button>
+            <button id="enviarBtn" disabled>Importar</button>
             <button id="baixarTemplateBtn" class="secondary">Baixar modelo (.xlsx)</button>
           </div>
           <label class="check-line" style="margin-top:12px">
@@ -119,7 +138,7 @@
 
         <div class="card">
           <h3 style="margin:0 0 6px; font-size:18px; color:var(--navy)">Layout esperado da planilha</h3>
-          <p class="small">A primeira linha deve conter os cabeçalhos abaixo. Os nomes toleram acentos e maiúsculas/minúsculas. Colunas em destaque são essenciais.</p>
+          <p class="small">A primeira linha deve conter os cabeçalhos abaixo. Os nomes toleram acentos e maiúsculas/minúsculas. Colunas em destaque são essenciais. <strong>No modo PDF</strong>, a extração é automática — não é preciso planilha.</p>
           <div class="cols-tpl">
             <span class="col-chip req">Titular*</span>
             <span class="col-chip req">Instalação*</span>

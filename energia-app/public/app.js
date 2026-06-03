@@ -397,43 +397,107 @@ window.limparFaturasInstalacao = async (id) => {
   } catch (e) { alert(e.message); }
 };
 
-/* ============================ UPLOAD EXCEL ============================ */
+/* ============================ UPLOAD (EXCEL / PDF) ============================ */
+let fonteSel = "excel";
 let arquivoExcel = null;
+let arquivosPdf = [];
+
+// Alterna entre Excel e PDF
+document.querySelectorAll("#segFonte .seg-btn").forEach((btn) =>
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#segFonte .seg-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    fonteSel = btn.dataset.fonte;
+    $("fonteExcel").style.display = fonteSel === "excel" ? "" : "none";
+    $("fontePdf").style.display = fonteSel === "pdf" ? "" : "none";
+    $("baixarTemplateBtn").style.display = fonteSel === "excel" ? "" : "none";
+    $("enviarBtn").textContent = fonteSel === "pdf" ? "Importar PDFs" : "Importar planilha";
+    atualizarBotaoImportar();
+    setStatus("uploadStatus", fonteSel === "pdf" ? "Selecione um ou mais PDFs…" : "Aguardando arquivo…");
+  })
+);
+
+// --- Excel dropzone ---
 const drop = $("excelDrop"), input = $("excelInput");
 drop.addEventListener("click", () => input.click());
-input.addEventListener("change", (e) => setArquivo(e.target.files[0]));
+input.addEventListener("change", (e) => setArquivoExcel(e.target.files[0]));
 ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("dragover"); }));
 ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("dragover"); }));
-drop.addEventListener("drop", (e) => setArquivo(e.dataTransfer.files[0]));
+drop.addEventListener("drop", (e) => setArquivoExcel(e.dataTransfer.files[0]));
 
-function setArquivo(f) {
+function setArquivoExcel(f) {
   arquivoExcel = f || null;
-  $("enviarExcelBtn").disabled = !arquivoExcel;
+  atualizarBotaoImportar();
   setStatus("uploadStatus", arquivoExcel ? "Arquivo selecionado: " + arquivoExcel.name : "Aguardando arquivo…");
 }
 
-$("enviarExcelBtn").addEventListener("click", async () => {
-  if (!arquivoExcel) return;
+// --- PDF dropzone (múltiplos) ---
+const pdrop = $("pdfDrop"), pinput = $("pdfInput");
+pdrop.addEventListener("click", () => pinput.click());
+pinput.addEventListener("change", (e) => addPdfs(e.target.files));
+["dragenter", "dragover"].forEach((ev) => pdrop.addEventListener(ev, (e) => { e.preventDefault(); pdrop.classList.add("dragover"); }));
+["dragleave", "drop"].forEach((ev) => pdrop.addEventListener(ev, (e) => { e.preventDefault(); pdrop.classList.remove("dragover"); }));
+pdrop.addEventListener("drop", (e) => addPdfs(e.dataTransfer.files));
+
+function addPdfs(fileList) {
+  const novos = [...fileList].filter((f) => /\.pdf$/i.test(f.name));
+  for (const f of novos) {
+    if (!arquivosPdf.some((x) => x.name === f.name && x.size === f.size)) arquivosPdf.push(f);
+  }
+  renderPdfLista();
+  atualizarBotaoImportar();
+}
+window.removerPdf = (i) => { arquivosPdf.splice(i, 1); renderPdfLista(); atualizarBotaoImportar(); };
+
+function renderPdfLista() {
+  const cont = $("pdfLista");
+  if (!arquivosPdf.length) { cont.innerHTML = ""; setStatus("uploadStatus", "Selecione um ou mais PDFs…"); return; }
+  cont.innerHTML = arquivosPdf
+    .map((f, i) => `<div class="pdf-item"><span>${esc(f.name)}</span><a href="#" onclick="removerPdf(${i});return false;">remover</a></div>`)
+    .join("");
+  setStatus("uploadStatus", `${arquivosPdf.length} PDF(s) selecionado(s).`);
+}
+
+function atualizarBotaoImportar() {
+  $("enviarBtn").disabled = fonteSel === "excel" ? !arquivoExcel : arquivosPdf.length === 0;
+}
+
+// --- Importar (decide pelo modo) ---
+$("enviarBtn").addEventListener("click", async () => {
   const fd = new FormData();
-  fd.append("arquivo", arquivoExcel);
   if ($("uploadTitular").value) fd.append("titular_id", $("uploadTitular").value);
   if ($("substituirChk").checked) fd.append("substituir", "true");
-  setStatus("uploadStatus", "Importando…");
-  $("enviarExcelBtn").disabled = true;
+
+  let endpoint;
+  if (fonteSel === "excel") {
+    if (!arquivoExcel) return;
+    fd.append("arquivo", arquivoExcel);
+    endpoint = "/api/upload/excel";
+  } else {
+    if (!arquivosPdf.length) return;
+    arquivosPdf.forEach((f) => fd.append("arquivos", f));
+    endpoint = "/api/upload/pdf";
+  }
+
+  setStatus("uploadStatus", fonteSel === "pdf" ? "Lendo PDFs e extraindo dados… (pode levar alguns segundos)" : "Importando…");
+  $("enviarBtn").disabled = true;
   try {
-    const r = await api("/api/upload/excel", { method: "POST", body: fd });
-    let msg = `Importação concluída (${r.modo === "substituir" ? "modo substituir" : "modo padrão"}). ${r.total_linhas} linha(s) lida(s).`;
+    const r = await api(endpoint, { method: "POST", body: fd });
+    let msg = `Importação concluída (${r.modo === "substituir" ? "modo substituir" : "modo padrão"}).`;
+    if (fonteSel === "pdf") msg += `\n${r.pdfs} PDF(s) processado(s).`;
+    else msg += ` ${r.total_linhas} linha(s) lida(s).`;
     msg += `\n✓ ${r.gravadas} fatura(s) nova(s) gravada(s).`;
     if (r.atualizadas) msg += `\n↻ ${r.atualizadas} fatura(s) existente(s) sobrescrita(s).`;
-    if (r.duplicadas_arquivo) msg += `\n• ${r.duplicadas_arquivo} duplicata(s) dentro do arquivo.`;
+    if (r.duplicadas_arquivo) msg += `\n• ${r.duplicadas_arquivo} duplicata(s) no envio.`;
     if (r.duplicadas_banco) msg += `\n• ${r.duplicadas_banco} já existiam no banco (não reimportadas).`;
-    msg += `\nNenhuma linha foi descartada por campos faltantes.`;
+    if (r.sem_dados) msg += `\n⚠ ${r.sem_dados} PDF(s) sem dados extraíveis (registrados com status ERRO).`;
     setStatus("uploadStatus", msg, "ok");
+    if (fonteSel === "pdf") { arquivosPdf = []; renderPdfLista(); }
     await carregarTitulares();
   } catch (e) {
     setStatus("uploadStatus", "Erro: " + e.message, "err");
   } finally {
-    $("enviarExcelBtn").disabled = false;
+    atualizarBotaoImportar();
   }
 });
 
