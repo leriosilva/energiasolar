@@ -310,8 +310,17 @@ $("salvarInstBtn").addEventListener("click", async () => {
   };
   if (!body.titular_id || !body.codigo) return alert("Titular e código são obrigatórios.");
   try {
-    if (id) await api(`/api/instalacoes/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    else await api("/api/instalacoes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (id) {
+      const r = await api(`/api/instalacoes/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (r && r.mesclada) {
+        let m = "O titular de destino já tinha uma instalação com este código, então elas foram mescladas.";
+        if (r.faturas_movidas) m += `\n${r.faturas_movidas} fatura(s) movida(s).`;
+        if (r.faturas_descartadas) m += `\n${r.faturas_descartadas} fatura(s) duplicada(s) descartada(s).`;
+        alert(m);
+      }
+    } else {
+      await api("/api/instalacoes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    }
     fecharModal("modalInstalacao");
     await carregarInstalacoes();
     await carregarTitulares();
