@@ -192,6 +192,48 @@ window.limparFaturasTitular = async (id) => {
   } catch (e) { alert(e.message); }
 };
 
+/* ---------------- Unificar titulares ---------------- */
+$("unificarBtn").addEventListener("click", () => {
+  if (titulares.length < 2) return alert("É preciso ter ao menos dois titulares para unificar.");
+  $("mergeDestino").innerHTML = titulares.map((t) => `<option value="${t.id}">${esc(t.nome)}</option>`).join("");
+  renderMergeOrigens();
+  abrirModal("modalMerge");
+});
+$("mergeDestino").addEventListener("change", renderMergeOrigens);
+
+function renderMergeOrigens() {
+  const destino = Number($("mergeDestino").value);
+  const origens = titulares.filter((t) => t.id !== destino);
+  const cont = $("mergeOrigens");
+  if (!origens.length) { cont.innerHTML = '<div class="muted-empty">Nenhum outro titular disponível.</div>'; return; }
+  cont.innerHTML = origens
+    .map((t) => `<label><input type="checkbox" value="${t.id}"><span>${esc(t.nome)} <span class="small">(${t.qtd_instalacoes} inst. · ${t.qtd_faturas} fat.)</span></span></label>`)
+    .join("");
+}
+
+$("confirmMergeBtn").addEventListener("click", async () => {
+  const destino = Number($("mergeDestino").value);
+  const origens = [...$("mergeOrigens").querySelectorAll("input:checked")].map((c) => Number(c.value));
+  if (!destino) return alert("Selecione o titular de destino.");
+  if (!origens.length) return alert("Selecione ao menos um titular de origem para unificar.");
+  const nomeDest = (titulares.find((t) => t.id === destino) || {}).nome || "destino";
+  if (!confirm(`Unificar ${origens.length} titular(es) em "${nomeDest}"?\nOs titulares de origem serão removidos. Esta ação não pode ser desfeita.`)) return;
+  try {
+    const r = await api("/api/titulares/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ destino_id: destino, origem_ids: origens }),
+    });
+    let msg = `Unificação concluída.\n${r.titulares_removidos} titular(es) removido(s).`;
+    msg += `\n${r.instalacoes_movidas} instalação(ões) movida(s), ${r.instalacoes_mescladas} mesclada(s).`;
+    if (r.faturas_descartadas) msg += `\n${r.faturas_descartadas} fatura(s) duplicada(s) descartada(s) na mesclagem.`;
+    alert(msg);
+    fecharModal("modalMerge");
+    await carregarTitulares();
+    await carregarInstalacoes();
+  } catch (e) { alert(e.message); }
+});
+
 window.verInstalacoesDe = (id) => {
   document.querySelector('[data-tab="instalacoes"]').click();
   $("filtroTitularInst").value = id;

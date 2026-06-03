@@ -200,3 +200,10 @@ tbody tr:nth-child(even){background:#fbfcff}
 .seg-btn{flex:1; padding:8px 14px; border:none; border-radius:9px; background:transparent; color:#33457e; font-weight:700; font-size:13px; box-shadow:none; cursor:pointer; white-space:nowrap}
 .seg-btn:hover{transform:none}
 .seg-btn.active{background:linear-gradient(135deg,var(--blue),var(--navy)); color:#fff; box-shadow:0 6px 16px rgba(49,70,163,.22)}
+
+/* ---------- Merge list ---------- */
+.merge-list{max-height:220px; overflow:auto; border:1px solid var(--line); border-radius:12px; padding:6px}
+.merge-list label{display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:9px; cursor:pointer; font-weight:500; color:#26324c; margin:0}
+.merge-list label:hover{background:#f3f6fd}
+.merge-list input{width:auto; margin:0}
+.merge-list .muted-empty{color:var(--muted); font-size:13px; padding:8px}

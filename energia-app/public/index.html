@@ -51,6 +51,7 @@
         <div class="grow">
           <input id="buscaTitular" placeholder="Buscar por nome ou documento…" />
         </div>
+        <button id="unificarBtn" class="secondary">Unificar titulares</button>
         <button id="novoTitularBtn">+ Novo titular</button>
       </div>
 
@@ -244,6 +245,19 @@
     <div class="modal-actions">
       <button class="secondary" data-close>Cancelar</button>
       <button id="salvarInstBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalMerge">
+  <div class="modal">
+    <h3>Unificar titulares</h3>
+    <p class="small" style="margin-top:-6px">Move todas as instalações e faturas dos titulares de origem para o titular de destino. As origens são removidas. Instalações com o mesmo código são mescladas, e faturas de um mês já existente no destino são descartadas.</p>
+    <div class="field"><label>Titular de destino (será mantido)</label><select id="mergeDestino"></select></div>
+    <div class="field"><label>Titulares a unificar no destino</label><div id="mergeOrigens" class="merge-list"></div></div>
+    <div class="modal-actions">
+      <button class="secondary" data-close>Cancelar</button>
+      <button id="confirmMergeBtn">Unificar</button>
     </div>
   </div>
 </div>
