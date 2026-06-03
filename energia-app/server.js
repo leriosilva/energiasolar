@@ -8,7 +8,8 @@ import { fileURLToPath } from "url";
 import path from "path";
 
 import { pool, migrate, query } from "./src/db.js";
-import { normalizarLinha } from "./src/parsing.js";
+import { normalizarLinha, normalizarCodigo } from "./src/parsing.js";
+import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -91,6 +92,7 @@ app.get("/api/instalacoes", wrap(async (req, res) => {
 app.post("/api/instalacoes", wrap(async (req, res) => {
   const { titular_id, codigo, apelido, endereco, distribuidora } = req.body;
   if (!titular_id || !codigo) return res.status(400).json({ erro: "titular_id e codigo sao obrigatorios." });
+  const cod = normalizarCodigo(codigo);
   const { rows } = await query(
     `INSERT INTO instalacoes (titular_id, codigo, apelido, endereco, distribuidora)
      VALUES ($1,$2,$3,$4,$5)
@@ -99,7 +101,7 @@ app.post("/api/instalacoes", wrap(async (req, res) => {
         endereco = COALESCE(EXCLUDED.endereco, instalacoes.endereco),
         distribuidora = COALESCE(EXCLUDED.distribuidora, instalacoes.distribuidora)
      RETURNING *`,
-    [titular_id, String(codigo).trim(), apelido || null, endereco || null, distribuidora || null]
+    [titular_id, cod, apelido || null, endereco || null, distribuidora || null]
   );
   res.status(201).json(rows[0]);
 }));
@@ -109,7 +111,7 @@ app.put("/api/instalacoes/:id", wrap(async (req, res) => {
   const { rows } = await query(
     `UPDATE instalacoes SET codigo=$1, apelido=$2, endereco=$3, distribuidora=$4
      WHERE id=$5 RETURNING *`,
-    [codigo, apelido || null, endereco || null, distribuidora || null, req.params.id]
+    [normalizarCodigo(codigo), apelido || null, endereco || null, distribuidora || null, req.params.id]
   );
   if (!rows.length) return res.status(404).json({ erro: "Instalacao nao encontrada." });
   res.json(rows[0]);
@@ -123,12 +125,19 @@ app.delete("/api/instalacoes/:id", wrap(async (req, res) => {
 /* ============================ FATURAS ============================ */
 
 // Lista faturas (com info de titular/instalacao) para a tela de analise.
+// Aceita multiplos ids separados por virgula: ?titular_id=1,2&instalacao_id=5,6
 app.get("/api/faturas", wrap(async (req, res) => {
-  const { titular_id, instalacao_id } = req.query;
+  const parseIds = (v) =>
+    String(v || "")
+      .split(",")
+      .map((s) => parseInt(s, 10))
+      .filter((n) => Number.isInteger(n));
+  const titIds = parseIds(req.query.titular_id);
+  const instIds = parseIds(req.query.instalacao_id);
   const params = [];
   const cond = [];
-  if (titular_id) { params.push(titular_id); cond.push(`i.titular_id = $${params.length}`); }
-  if (instalacao_id) { params.push(instalacao_id); cond.push(`f.instalacao_id = $${params.length}`); }
+  if (titIds.length) { params.push(titIds); cond.push(`i.titular_id = ANY($${params.length})`); }
+  if (instIds.length) { params.push(instIds); cond.push(`f.instalacao_id = ANY($${params.length})`); }
   const where = cond.length ? "WHERE " + cond.join(" AND ") : "";
   const { rows } = await query(`
     SELECT f.*, i.codigo AS instalacao_codigo, i.apelido AS instalacao_apelido,
@@ -147,25 +156,68 @@ app.delete("/api/faturas/:id", wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// Insere/atualiza uma fatura (upsert por instalacao + mes_key).
-async function upsertFatura(instalacaoId, f) {
-  await query(
+// Limpa TODAS as faturas de um titular (todas as instalacoes dele).
+app.delete("/api/titulares/:id/faturas", wrap(async (req, res) => {
+  const { rowCount } = await query(
+    `DELETE FROM faturas
+     WHERE instalacao_id IN (SELECT id FROM instalacoes WHERE titular_id = $1)`,
+    [req.params.id]
+  );
+  res.json({ ok: true, removidas: rowCount });
+}));
+
+// Limpa todas as faturas de uma instalacao.
+app.delete("/api/instalacoes/:id/faturas", wrap(async (req, res) => {
+  const { rowCount } = await query(`DELETE FROM faturas WHERE instalacao_id = $1`, [req.params.id]);
+  res.json({ ok: true, removidas: rowCount });
+}));
+
+// Insere a fatura SOMENTE se ainda nao existir (instalacao + mes_key).
+// Retorna true se inseriu; false se ja existia (duplicata no banco).
+async function inserirFaturaSeNova(instalacaoId, f) {
+  const { rows } = await query(
+    `INSERT INTO faturas
+      (instalacao_id, mes, mes_key, ano, leitura, vencimento, consumo, dias, total, bandeira, saldo, inj, status, arquivo)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+     ON CONFLICT (instalacao_id, mes_key) DO NOTHING
+     RETURNING id`,
+    [
+      instalacaoId, f.mes, f.mesKey, f.ano, f.leitura, f.vencimento,
+      f.consumo, f.dias, f.total, f.bandeira, f.saldo, f.inj, f.status, f.arquivo || null,
+    ]
+  );
+  return rows.length > 0;
+}
+
+// Insere OU sobrescreve a fatura existente (instalacao + mes_key).
+// Retorna true se foi uma insercao nova; false se atualizou uma existente.
+async function upsertFaturaSubstituindo(instalacaoId, f) {
+  const { rows } = await query(
     `INSERT INTO faturas
       (instalacao_id, mes, mes_key, ano, leitura, vencimento, consumo, dias, total, bandeira, saldo, inj, status, arquivo)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
      ON CONFLICT (instalacao_id, mes_key) DO UPDATE SET
        mes=EXCLUDED.mes, ano=EXCLUDED.ano, leitura=EXCLUDED.leitura, vencimento=EXCLUDED.vencimento,
        consumo=EXCLUDED.consumo, dias=EXCLUDED.dias, total=EXCLUDED.total, bandeira=EXCLUDED.bandeira,
-       saldo=EXCLUDED.saldo, inj=EXCLUDED.inj, status=EXCLUDED.status, arquivo=EXCLUDED.arquivo`,
+       saldo=EXCLUDED.saldo, inj=EXCLUDED.inj, status=EXCLUDED.status, arquivo=EXCLUDED.arquivo
+     RETURNING (xmax = 0) AS inserted`,
     [
       instalacaoId, f.mes, f.mesKey, f.ano, f.leitura, f.vencimento,
       f.consumo, f.dias, f.total, f.bandeira, f.saldo, f.inj, f.status, f.arquivo || null,
     ]
   );
+  return rows[0] && rows[0].inserted === true;
 }
 
-// Garante instalacao por (titular, codigo), criando se necessario.
+// Chave estavel para faturas sem mes: evita colisao mas detecta reimportacao identica.
+function chaveSemMes(f) {
+  const base = [f.instalacao, f.total, f.consumo, f.saldo, f.inj, f.vencimento, f.arquivo].join("|");
+  return "SM-" + crypto.createHash("md5").update(base).digest("hex").slice(0, 12);
+}
+
+// Garante instalacao por (titular, codigo normalizado), criando se necessario.
 async function getOrCreateInstalacao(titularId, codigo, apelido, distribuidora) {
+  const cod = normalizarCodigo(codigo) || "SEM-INSTALACAO";
   const { rows } = await query(
     `INSERT INTO instalacoes (titular_id, codigo, apelido, distribuidora)
      VALUES ($1,$2,$3,$4)
@@ -173,9 +225,17 @@ async function getOrCreateInstalacao(titularId, codigo, apelido, distribuidora) 
        apelido = COALESCE(instalacoes.apelido, EXCLUDED.apelido),
        distribuidora = COALESCE(instalacoes.distribuidora, EXCLUDED.distribuidora)
      RETURNING id`,
-    [titularId, String(codigo).trim(), apelido || null, distribuidora || null]
+    [titularId, cod, apelido || null, distribuidora || null]
   );
   return rows[0].id;
+}
+
+// Garante um titular "guarda-chuva" para linhas sem titular (nao perder dados).
+async function getOrCreateTitularPadrao() {
+  const sel = await query(`SELECT id FROM titulares WHERE nome = $1 LIMIT 1`, ["(Sem titular)"]);
+  if (sel.rows.length) return sel.rows[0].id;
+  const ins = await query(`INSERT INTO titulares (nome) VALUES ($1) RETURNING id`, ["(Sem titular)"]);
+  return ins.rows[0].id;
 }
 
 /* ============================ UPLOAD EXCEL ============================ */
@@ -187,6 +247,7 @@ app.post("/api/upload/excel", upload.single("arquivo"), wrap(async (req, res) =>
   if (!req.file) return res.status(400).json({ erro: "Nenhum arquivo enviado." });
 
   const titularIdForm = req.body.titular_id ? Number(req.body.titular_id) : null;
+  const substituir = String(req.body.substituir || "") === "true";
 
   const wb = XLSX.read(req.file.buffer, { type: "buffer" });
   const ws = wb.Sheets[wb.SheetNames[0]];
@@ -213,45 +274,64 @@ app.post("/api/upload/excel", upload.single("arquivo"), wrap(async (req, res) =>
     return id;
   }
 
-  let gravadas = 0;
-  const ignoradas = [];
-  const duplicadas = []; // mesma instalacao+mes aparecendo 2+ vezes no arquivo
+  let titularPadraoId = null; // criado sob demanda
+  let gravadas = 0;        // faturas novas inseridas
+  let atualizadas = 0;     // faturas existentes sobrescritas (modo substituir)
+  const dupArquivo = [];   // duplicadas dentro do proprio arquivo
+  let dupBanco = 0;        // ja existiam no banco (modo padrao, nao reimporta)
   const vistas = new Set();
   const instalacaoCache = new Map(); // `${titularId}:${codigo}` -> instalacaoId
 
   for (const f of linhas) {
-    // resolve titular da linha
+    // 1) Resolve titular: form > coluna > titular padrao (nunca ignora)
     let titularId = titularIdForm;
     if (!titularId && f.titular) titularId = await resolverTitularPorNome(f.titular);
-    if (!titularId) { ignoradas.push({ motivo: "sem titular", linha: f }); continue; }
-    if (!f.instalacao) { ignoradas.push({ motivo: "sem codigo de instalacao", linha: f }); continue; }
-    if (!f.mesKey) { ignoradas.push({ motivo: "sem mes", linha: f }); continue; }
+    if (!titularId) {
+      if (!titularPadraoId) titularPadraoId = await getOrCreateTitularPadrao();
+      titularId = titularPadraoId;
+    }
 
-    const chaveUnica = `${titularId}:${f.instalacao}:${f.mesKey}`;
+    // 2) Codigo de instalacao: normaliza; se vazio usa placeholder (nunca ignora)
+    const codigo = f.instalacao || "SEM-INSTALACAO";
+
+    // 3) Chave do mes: se vazio, gera chave estavel por conteudo (nunca ignora)
+    if (!f.mesKey) f.mesKey = chaveSemMes({ ...f, instalacao: codigo });
+
+    // 4) Dedup dentro do arquivo (em ambos os modos: a ultima ocorrencia vale)
+    const chaveUnica = `${titularId}:${codigo}:${f.mesKey}`;
     if (vistas.has(chaveUnica)) {
-      duplicadas.push({ instalacao: f.instalacao, mes: f.mesLabel, arquivo: f.arquivo });
+      dupArquivo.push({ instalacao: codigo, mes: f.mesLabel, arquivo: f.arquivo });
+      if (!substituir) continue; // modo padrao: ignora repetida do arquivo
     }
     vistas.add(chaveUnica);
 
-    const ck = `${titularId}:${f.instalacao}`;
+    // 5) Instalacao (cache por requisicao)
+    const ck = `${titularId}:${codigo}`;
     let instalacaoId = instalacaoCache.get(ck);
     if (!instalacaoId) {
-      instalacaoId = await getOrCreateInstalacao(titularId, f.instalacao, f.apelido, f.distribuidora);
+      instalacaoId = await getOrCreateInstalacao(titularId, codigo, f.apelido, f.distribuidora);
       instalacaoCache.set(ck, instalacaoId);
     }
-    await upsertFatura(instalacaoId, f);
-    gravadas++;
+
+    // 6) Grava conforme o modo
+    if (substituir) {
+      const inseriu = await upsertFaturaSubstituindo(instalacaoId, f);
+      if (inseriu) gravadas++; else atualizadas++;
+    } else {
+      const inseriu = await inserirFaturaSeNova(instalacaoId, f);
+      if (inseriu) gravadas++; else dupBanco++;
+    }
   }
 
   res.json({
     ok: true,
+    modo: substituir ? "substituir" : "padrao",
     total_linhas: linhas.length,
     gravadas,
-    faturas_unicas: vistas.size,
-    ignoradas: ignoradas.length,
-    duplicadas: duplicadas.length,
-    detalhe_duplicadas: duplicadas.slice(0, 20),
-    detalhe_ignoradas: ignoradas.slice(0, 20),
+    atualizadas,
+    duplicadas_arquivo: dupArquivo.length,
+    duplicadas_banco: dupBanco,
+    detalhe_duplicadas: dupArquivo.slice(0, 20),
   });
 }));
 
@@ -261,16 +341,17 @@ app.post("/api/faturas/lote", wrap(async (req, res) => {
   if (!titular_id) return res.status(400).json({ erro: "titular_id e obrigatorio." });
   if (!Array.isArray(faturas) || !faturas.length) return res.status(400).json({ erro: "Lista de faturas vazia." });
 
-  let gravadas = 0;
+  let gravadas = 0, duplicadas = 0;
   const cache = new Map();
   for (const f of faturas) {
-    if (!f.instalacao || !f.mesKey) continue;
-    let instId = cache.get(f.instalacao);
-    if (!instId) { instId = await getOrCreateInstalacao(titular_id, f.instalacao, f.apelido); cache.set(f.instalacao, instId); }
-    await upsertFatura(instId, f);
-    gravadas++;
+    const codigo = normalizarCodigo(f.instalacao) || "SEM-INSTALACAO";
+    if (!f.mesKey) f.mesKey = chaveSemMes({ ...f, instalacao: codigo });
+    let instId = cache.get(codigo);
+    if (!instId) { instId = await getOrCreateInstalacao(titular_id, codigo, f.apelido, f.distribuidora); cache.set(codigo, instId); }
+    const inseriu = await inserirFaturaSeNova(instId, f);
+    if (inseriu) gravadas++; else duplicadas++;
   }
-  res.json({ ok: true, gravadas });
+  res.json({ ok: true, gravadas, duplicadas });
 }));
 
 /* ============================ TEMPLATE EXCEL ============================ */
