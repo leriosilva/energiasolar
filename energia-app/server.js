@@ -6,12 +6,17 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import { fileURLToPath } from "url";
 import path from "path";
+import fs from "fs";
+import os from "os";
+import { spawn } from "child_process";
 
 import { pool, migrate, query } from "./src/db.js";
-import { normalizarLinha, normalizarCodigo } from "./src/parsing.js";
+import { normalizarLinha, normalizarCodigo, parseMes } from "./src/parsing.js";
 import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PYTHON_BIN = process.env.PYTHON_BIN || "python3";
+const AGENTE_PY = path.join(__dirname, "lib", "agente_faturas_energia.py");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -353,22 +358,55 @@ async function getOrCreateTitularPadrao() {
 // Recebe um .xlsx/.csv e grava as faturas.
 // O titular pode vir por (a) titular_id no form (todas as linhas vao para ele)
 // ou (b) coluna "Titular" no proprio arquivo (cria/encontra por nome).
-app.post("/api/upload/excel", upload.single("arquivo"), wrap(async (req, res) => {
-  if (!req.file) return res.status(400).json({ erro: "Nenhum arquivo enviado." });
+// Chama o agente Python em modo --json para extrair os dados dos PDFs.
+function extrairPdfsParaJson(caminhos) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(PYTHON_BIN, [AGENTE_PY, "--json", ...caminhos], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let out = "", err = "";
+    proc.stdout.on("data", (d) => (out += d));
+    proc.stderr.on("data", (d) => (err += d));
+    proc.on("error", (e) => reject(new Error("Falha ao executar o Python: " + e.message)));
+    proc.on("close", (code) => {
+      if (code !== 0) return reject(new Error("Agente Python falhou (cod " + code + "): " + err.slice(0, 500)));
+      try {
+        resolve(JSON.parse(out || "[]"));
+      } catch (e) {
+        reject(new Error("Saida do agente nao e JSON valido: " + (out || "").slice(0, 300)));
+      }
+    });
+  });
+}
 
-  const titularIdForm = req.body.titular_id ? Number(req.body.titular_id) : null;
-  const substituir = String(req.body.substituir || "") === "true";
+// Converte um registro do agente Python no formato normalizado de fatura.
+function mapearRegistroPdf(r) {
+  const mesInfo = parseMes(r.mes);
+  return {
+    distribuidora: r.distribuidora || "",
+    titular: (r.titular || "").trim(),
+    instalacao: normalizarCodigo(r.instalacao),
+    apelido: r.apelido || "",
+    mes: r.mes || "",
+    mesLabel: mesInfo.label || r.mes || "",
+    mesKey: mesInfo.chave || "",
+    ano: mesInfo.ano || "",
+    leitura: r.leitura_atual || "",
+    vencimento: r.vencimento || "",
+    consumo: Number(r.consumo_kwh) || 0,
+    dias: Number(r.num_dias) || 0,
+    total: Number(r.total_pagar) || 0,
+    bandeira: r.bandeira || "",
+    saldo: Number(r.saldo_energia_kwh) || 0,
+    inj: Number(r.energia_injetada_kwh) || 0,
+    arquivo: r.arquivo || "",
+    status: r._ok === false ? "ERRO" : "OK",
+  };
+}
 
-  const wb = XLSX.read(req.file.buffer, { type: "buffer" });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
-  const linhas = json
-    .map(normalizarLinha)
-    .filter((r) => r.instalacao || r.mes || r.total || r.consumo);
-
-  if (!linhas.length) return res.status(400).json({ erro: "Planilha vazia ou sem colunas reconhecidas." });
-
-  // cache de nome de titular -> id (para a opcao por coluna)
+// Logica compartilhada de gravacao (Excel e PDF usam a mesma).
+// linhas: array no formato normalizado; opts: { titularIdForm, substituir }
+async function processarFaturas(linhas, { titularIdForm = null, substituir = false } = {}) {
   const cacheTitular = new Map();
   async function resolverTitularPorNome(nome) {
     const key = nome.toLowerCase();
@@ -384,38 +422,29 @@ app.post("/api/upload/excel", upload.single("arquivo"), wrap(async (req, res) =>
     return id;
   }
 
-  let titularPadraoId = null; // criado sob demanda
-  let gravadas = 0;        // faturas novas inseridas
-  let atualizadas = 0;     // faturas existentes sobrescritas (modo substituir)
-  const dupArquivo = [];   // duplicadas dentro do proprio arquivo
-  let dupBanco = 0;        // ja existiam no banco (modo padrao, nao reimporta)
+  let titularPadraoId = null;
+  let gravadas = 0, atualizadas = 0, dupBanco = 0;
+  const dupArquivo = [];
   const vistas = new Set();
-  const instalacaoCache = new Map(); // `${titularId}:${codigo}` -> instalacaoId
+  const instalacaoCache = new Map();
 
   for (const f of linhas) {
-    // 1) Resolve titular: form > coluna > titular padrao (nunca ignora)
     let titularId = titularIdForm;
     if (!titularId && f.titular) titularId = await resolverTitularPorNome(f.titular);
     if (!titularId) {
       if (!titularPadraoId) titularPadraoId = await getOrCreateTitularPadrao();
       titularId = titularPadraoId;
     }
-
-    // 2) Codigo de instalacao: normaliza; se vazio usa placeholder (nunca ignora)
     const codigo = f.instalacao || "SEM-INSTALACAO";
-
-    // 3) Chave do mes: se vazio, gera chave estavel por conteudo (nunca ignora)
     if (!f.mesKey) f.mesKey = chaveSemMes({ ...f, instalacao: codigo });
 
-    // 4) Dedup dentro do arquivo (em ambos os modos: a ultima ocorrencia vale)
     const chaveUnica = `${titularId}:${codigo}:${f.mesKey}`;
     if (vistas.has(chaveUnica)) {
       dupArquivo.push({ instalacao: codigo, mes: f.mesLabel, arquivo: f.arquivo });
-      if (!substituir) continue; // modo padrao: ignora repetida do arquivo
+      if (!substituir) continue;
     }
     vistas.add(chaveUnica);
 
-    // 5) Instalacao (cache por requisicao)
     const ck = `${titularId}:${codigo}`;
     let instalacaoId = instalacaoCache.get(ck);
     if (!instalacaoId) {
@@ -423,7 +452,6 @@ app.post("/api/upload/excel", upload.single("arquivo"), wrap(async (req, res) =>
       instalacaoCache.set(ck, instalacaoId);
     }
 
-    // 6) Grava conforme o modo
     if (substituir) {
       const inseriu = await upsertFaturaSubstituindo(instalacaoId, f);
       if (inseriu) gravadas++; else atualizadas++;
@@ -433,16 +461,65 @@ app.post("/api/upload/excel", upload.single("arquivo"), wrap(async (req, res) =>
     }
   }
 
-  res.json({
-    ok: true,
+  return {
     modo: substituir ? "substituir" : "padrao",
     total_linhas: linhas.length,
-    gravadas,
-    atualizadas,
+    gravadas, atualizadas,
     duplicadas_arquivo: dupArquivo.length,
     duplicadas_banco: dupBanco,
     detalhe_duplicadas: dupArquivo.slice(0, 20),
-  });
+  };
+}
+
+app.post("/api/upload/excel", upload.single("arquivo"), wrap(async (req, res) => {
+  if (!req.file) return res.status(400).json({ erro: "Nenhum arquivo enviado." });
+  const titularIdForm = req.body.titular_id ? Number(req.body.titular_id) : null;
+  const substituir = String(req.body.substituir || "") === "true";
+
+  const wb = XLSX.read(req.file.buffer, { type: "buffer" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+  const linhas = json
+    .map(normalizarLinha)
+    .filter((r) => r.instalacao || r.mes || r.total || r.consumo);
+
+  if (!linhas.length) return res.status(400).json({ erro: "Planilha vazia ou sem colunas reconhecidas." });
+
+  const resultado = await processarFaturas(linhas, { titularIdForm, substituir });
+  res.json({ ok: true, ...resultado });
+}));
+
+// Importa faturas a partir de PDFs, usando o agente Python (pdfplumber).
+app.post("/api/upload/pdf", upload.array("arquivos", 50), wrap(async (req, res) => {
+  if (!req.files || !req.files.length) return res.status(400).json({ erro: "Nenhum PDF enviado." });
+  const titularIdForm = req.body.titular_id ? Number(req.body.titular_id) : null;
+  const substituir = String(req.body.substituir || "") === "true";
+
+  // Salva os PDFs em um diretorio temporario unico.
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "faturas-"));
+  const salvos = [];
+  try {
+    for (const file of req.files) {
+      // Preserva o nome original (os parsers usam o nome p/ instalacao/mes).
+      const safe = file.originalname.replace(/[^\w.\- ]/g, "_");
+      const dest = path.join(tmpDir, safe);
+      fs.writeFileSync(dest, file.buffer);
+      salvos.push(dest);
+    }
+
+    const registros = await extrairPdfsParaJson(salvos);
+    const linhas = registros.map(mapearRegistroPdf).filter((r) => r.instalacao || r.mes || r.total || r.consumo || r.arquivo);
+    const semDados = registros.filter((r) => r._ok === false).length;
+
+    if (!linhas.length) {
+      return res.status(400).json({ erro: "Nenhum dado pôde ser extraído dos PDFs enviados." });
+    }
+    const resultado = await processarFaturas(linhas, { titularIdForm, substituir });
+    res.json({ ok: true, pdfs: req.files.length, sem_dados: semDados, ...resultado });
+  } finally {
+    // limpeza
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+  }
 }));
 
 // Salva faturas extraidas via PDF no frontend (envio em lote JSON).
