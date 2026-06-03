@@ -175,23 +175,56 @@ app.put("/api/instalacoes/:id", wrap(async (req, res) => {
   const { titular_id, codigo, apelido, endereco, distribuidora } = req.body;
   if (!titular_id || !codigo) return res.status(400).json({ erro: "titular_id e codigo sao obrigatorios." });
   const cod = normalizarCodigo(codigo);
-  // Verifica conflito: o titular de destino ja tem outra instalacao com este codigo?
+  const id = Number(req.params.id);
+
+  // O titular de destino ja possui outra instalacao com este codigo?
   const conflito = await query(
     `SELECT id FROM instalacoes WHERE titular_id = $1 AND codigo = $2 AND id <> $3 LIMIT 1`,
-    [titular_id, cod, req.params.id]
+    [titular_id, cod, id]
   );
-  if (conflito.rows.length) {
-    return res.status(409).json({
-      erro: "O titular de destino já possui uma instalação com este código. Use 'Unificar titulares' para mesclar, ou ajuste o código.",
-    });
+
+  // Sem conflito: simples atualizacao (inclui troca de titular).
+  if (!conflito.rows.length) {
+    const { rows } = await query(
+      `UPDATE instalacoes SET titular_id=$1, codigo=$2, apelido=$3, endereco=$4, distribuidora=$5
+       WHERE id=$6 RETURNING *`,
+      [titular_id, cod, apelido || null, endereco || null, distribuidora || null, id]
+    );
+    if (!rows.length) return res.status(404).json({ erro: "Instalacao nao encontrada." });
+    return res.json(rows[0]);
   }
-  const { rows } = await query(
-    `UPDATE instalacoes SET titular_id=$1, codigo=$2, apelido=$3, endereco=$4, distribuidora=$5
-     WHERE id=$6 RETURNING *`,
-    [titular_id, cod, apelido || null, endereco || null, distribuidora || null, req.params.id]
-  );
-  if (!rows.length) return res.status(404).json({ erro: "Instalacao nao encontrada." });
-  res.json(rows[0]);
+
+  // Com conflito: mescla esta instalacao na existente do destino (consolida por codigo).
+  const destInst = conflito.rows[0].id;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const mv = await client.query(
+      `UPDATE faturas SET instalacao_id=$1
+       WHERE instalacao_id=$2
+         AND mes_key NOT IN (SELECT mes_key FROM faturas WHERE instalacao_id=$1)`,
+      [destInst, id]
+    );
+    const del = await client.query(`DELETE FROM faturas WHERE instalacao_id=$1`, [id]);
+    await client.query(`DELETE FROM instalacoes WHERE id=$1`, [id]);
+    // Completa dados vazios da instalacao de destino.
+    await client.query(
+      `UPDATE instalacoes SET
+         apelido = COALESCE(apelido, $2),
+         endereco = COALESCE(endereco, $3),
+         distribuidora = COALESCE(distribuidora, $4)
+       WHERE id = $1`,
+      [destInst, apelido || null, endereco || null, distribuidora || null]
+    );
+    const { rows } = await client.query(`SELECT * FROM instalacoes WHERE id=$1`, [destInst]);
+    await client.query("COMMIT");
+    return res.json({ ...rows[0], mesclada: true, faturas_movidas: mv.rowCount, faturas_descartadas: del.rowCount });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
 }));
 
 app.delete("/api/instalacoes/:id", wrap(async (req, res) => {
