@@ -7,7 +7,7 @@ Sistema web full-stack para gestão de faturas de energia, com controle de **mú
 - **Titulares**: cadastro de clientes (pessoa física ou jurídica), com documento, contato e observações.
 - **Instalações**: cada titular pode ter várias unidades consumidoras (UCs). O código da instalação corresponde ao número que aparece na fatura.
 - **Upload de Excel**: importa planilhas (.xlsx, .xls, .csv) com as faturas. As instalações são criadas/atualizadas automaticamente, e faturas repetidas (mesmo titular + instalação + mês) são atualizadas em vez de duplicadas.
-- **Análise**: dashboard com KPIs, gráficos mês a mês (consumo, valor, custo/kWh, saldo × injetada), consolidação por instalação e tabela analítica. Filtros por titular, instalação, ano e bandeira.
+- **Análise**: dashboard com KPIs, gráficos mês a mês (consumo, valor, custo/kWh, saldo × injetada), consolidação por instalação e tabela analítica. Filtros por múltiplos titulares, múltiplas instalações, ano e bandeira. A visualização dos dashboards pode ser **Consolidada** (todas as instalações somadas) ou **Por instalação** (uma série por UC, para comparação).
 
 ## Arquitetura
 
@@ -106,9 +106,11 @@ A primeira linha do Excel deve conter os cabeçalhos abaixo (acentos e maiúscul
 | PUT/DELETE | `/api/titulares/:id` | Editar / excluir titular |
 | GET/POST | `/api/instalacoes` | Listar (`?titular_id=`) / criar instalação |
 | PUT/DELETE | `/api/instalacoes/:id` | Editar / excluir instalação |
-| GET | `/api/faturas` | Listar faturas (`?titular_id=` `&instalacao_id=`) |
+| GET | `/api/faturas` | Listar faturas (`?titular_id=1,2` `&instalacao_id=5,6` — aceita múltiplos) |
 | DELETE | `/api/faturas/:id` | Excluir fatura |
-| POST | `/api/upload/excel` | Importar planilha (multipart) |
+| DELETE | `/api/titulares/:id/faturas` | Limpar todas as faturas de um titular |
+| DELETE | `/api/instalacoes/:id/faturas` | Limpar todas as faturas de uma instalação |
+| POST | `/api/upload/excel` | Importar planilha (multipart; campo `substituir=true` sobrescreve) |
 | POST | `/api/faturas/lote` | Inserir faturas em lote (JSON) |
 | GET | `/api/template` | Baixar modelo de planilha |
 | GET | `/api/health` | Healthcheck |
