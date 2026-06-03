@@ -167,3 +167,36 @@ tbody tr:nth-child(even){background:#fbfcff}
 
 @media (max-width:1000px){.kpis{grid-template-columns:repeat(2,1fr)} .grid.cols-2,.grid.cols-3{grid-template-columns:1fr}}
 @media (max-width:640px){.kpis{grid-template-columns:1fr}}
+
+/* ---------- Multiselect ---------- */
+.ms{position:relative; font-size:14px}
+.ms-toggle{
+  width:100%; text-align:left; padding:11px 13px; border:1px solid var(--line); border-radius:12px;
+  background:#fff; color:var(--ink); font-weight:600; cursor:pointer; box-shadow:none;
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+}
+.ms-toggle:hover{transform:none; border-color:var(--blue-soft)}
+.ms-toggle .chev{color:var(--muted); font-size:12px}
+.ms-panel{
+  position:absolute; z-index:30; top:calc(100% + 6px); left:0; right:0; max-height:280px; overflow:auto;
+  background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 16px 40px rgba(15,23,42,.16);
+  padding:8px; display:none;
+}
+.ms-panel.open{display:block}
+.ms-search{margin-bottom:6px; position:sticky; top:0}
+.ms-search input{padding:8px 10px; font-size:13px}
+.ms-opt{display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:9px; cursor:pointer}
+.ms-opt:hover{background:#f3f6fd}
+.ms-opt input{width:auto; margin:0}
+.ms-opt span{font-weight:500; color:#26324c}
+.ms-bar{display:flex; gap:8px; padding:4px 6px 8px; border-bottom:1px solid var(--line); margin-bottom:6px}
+.ms-bar button{padding:5px 10px; font-size:12px; border-radius:8px; background:#eef2fb; color:#33457e; box-shadow:none; border:1px solid var(--line)}
+
+.check-line{display:flex; align-items:flex-start; gap:9px; font-size:13.5px; color:#3a4868; font-weight:500; cursor:pointer}
+.check-line input{width:auto; margin:2px 0 0}
+
+/* ---------- Segmented control ---------- */
+.seg{display:inline-flex; background:#eef2fb; border:1px solid var(--line); border-radius:12px; padding:3px; gap:3px}
+.seg-btn{flex:1; padding:8px 14px; border:none; border-radius:9px; background:transparent; color:#33457e; font-weight:700; font-size:13px; box-shadow:none; cursor:pointer; white-space:nowrap}
+.seg-btn:hover{transform:none}
+.seg-btn.active{background:linear-gradient(135deg,var(--blue),var(--navy)); color:#fff; box-shadow:0 6px 16px rgba(49,70,163,.22)}

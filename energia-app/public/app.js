@@ -14,6 +14,67 @@ const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
 
 let titulares = [];
 let charts = {};
+let modoViz = "consolidado"; // "consolidado" | "instalacao"
+
+/* ---------------- Multiselect ---------------- */
+class MultiSelect {
+  constructor(containerId, { placeholder = "Todos", onChange } = {}) {
+    this.el = $(containerId);
+    this.placeholder = placeholder;
+    this.onChange = onChange || (() => {});
+    this.options = []; // {value, label}
+    this.selected = new Set();
+    this.open = false;
+    this.render();
+    document.addEventListener("click", (e) => {
+      if (!this.el.contains(e.target)) this.setOpen(false);
+    });
+  }
+  setOptions(opts) {
+    const valid = new Set(opts.map((o) => String(o.value)));
+    [...this.selected].forEach((v) => { if (!valid.has(v)) this.selected.delete(v); });
+    this.options = opts;
+    this.render();
+  }
+  getSelected() { return [...this.selected]; }
+  setOpen(v) { this.open = v; this.render(); }
+  toggle(value) {
+    const v = String(value);
+    if (this.selected.has(v)) this.selected.delete(v); else this.selected.add(v);
+    this.render();
+    this.onChange(this.getSelected());
+  }
+  selectAll() { this.options.forEach((o) => this.selected.add(String(o.value))); this.render(); this.onChange(this.getSelected()); }
+  clear() { this.selected.clear(); this.render(); this.onChange(this.getSelected()); }
+  label() {
+    const n = this.selected.size;
+    if (n === 0) return this.placeholder;
+    if (n === 1) { const o = this.options.find((o) => String(o.value) === [...this.selected][0]); return o ? o.label : "1 selecionado"; }
+    return `${n} selecionados`;
+  }
+  render() {
+    const opts = this.options
+      .map((o) => {
+        const v = String(o.value);
+        const ck = this.selected.has(v) ? "checked" : "";
+        return `<label class="ms-opt"><input type="checkbox" ${ck} data-v="${esc(v)}"><span>${esc(o.label)}</span></label>`;
+      })
+      .join("");
+    this.el.innerHTML = `
+      <button type="button" class="ms-toggle">${esc(this.label())}<span class="chev">▾</span></button>
+      <div class="ms-panel ${this.open ? "open" : ""}">
+        <div class="ms-bar"><button type="button" data-all>Todos</button><button type="button" data-none>Limpar</button></div>
+        ${opts || '<div class="small" style="padding:8px">Sem opções</div>'}
+      </div>`;
+    this.el.querySelector(".ms-toggle").addEventListener("click", (e) => { e.stopPropagation(); this.setOpen(!this.open); });
+    this.el.querySelector("[data-all]")?.addEventListener("click", (e) => { e.stopPropagation(); this.selectAll(); });
+    this.el.querySelector("[data-none]")?.addEventListener("click", (e) => { e.stopPropagation(); this.clear(); });
+    this.el.querySelectorAll(".ms-opt input").forEach((cb) =>
+      cb.addEventListener("change", (e) => { e.stopPropagation(); this.toggle(cb.dataset.v); })
+    );
+  }
+}
+let msTitular, msInstalacao;
 
 /* ---------------- Tabs ---------------- */
 document.querySelectorAll(".tab-btn").forEach((btn) =>
@@ -45,7 +106,7 @@ async function carregarTitulares() {
   preencherSelectTitulares($("filtroTitularInst"), false, "Todos os titulares");
   preencherSelectTitulares($("iTitular"), false);
   preencherSelectTitulares($("uploadTitular"), true);
-  preencherSelectTitulares($("fTitular"), false, "Todos");
+  if (msTitular) msTitular.setOptions(titulares.map((t) => ({ value: t.id, label: t.nome })));
 }
 
 function renderTitulares() {
@@ -68,6 +129,7 @@ function renderTitulares() {
       <div class="row-actions" style="margin-top:8px">
         <button class="small secondary" onclick="editarTitular(${t.id})">Editar</button>
         <button class="small ghost" onclick="verInstalacoesDe(${t.id})">Ver instalações</button>
+        <button class="small ghost" onclick="limparFaturasTitular(${t.id})">Limpar faturas</button>
         <button class="small danger" onclick="excluirTitular(${t.id})">Excluir</button>
       </div>
     </div>`
@@ -119,6 +181,17 @@ window.excluirTitular = async (id) => {
   await carregarTitulares();
 };
 
+window.limparFaturasTitular = async (id) => {
+  const t = titulares.find((x) => x.id === id);
+  const nome = t ? t.nome : "este titular";
+  if (!confirm(`Limpar TODAS as faturas de "${nome}"?\nAs instalações são mantidas; apenas as faturas serão apagadas.\nÚtil antes de reimportar dados corrigidos.`)) return;
+  try {
+    const r = await api(`/api/titulares/${id}/faturas`, { method: "DELETE" });
+    alert(`${r.removidas} fatura(s) removida(s) de "${nome}".`);
+    await carregarTitulares();
+  } catch (e) { alert(e.message); }
+};
+
 window.verInstalacoesDe = (id) => {
   document.querySelector('[data-tab="instalacoes"]').click();
   $("filtroTitularInst").value = id;
@@ -156,6 +229,7 @@ async function carregarInstalacoes() {
       <td>${i.qtd_faturas}</td>
       <td class="row-actions">
         <button class="small secondary" onclick='editarInstalacao(${JSON.stringify(i)})'>Editar</button>
+        <button class="small ghost" onclick="limparFaturasInstalacao(${i.id})">Limpar faturas</button>
         <button class="small danger" onclick="excluirInstalacao(${i.id})">Excluir</button>
       </td>
     </tr>`
@@ -209,6 +283,16 @@ window.excluirInstalacao = async (id) => {
   await carregarTitulares();
 };
 
+window.limparFaturasInstalacao = async (id) => {
+  if (!confirm("Limpar todas as faturas desta instalação? A instalação é mantida.")) return;
+  try {
+    const r = await api(`/api/instalacoes/${id}/faturas`, { method: "DELETE" });
+    alert(`${r.removidas} fatura(s) removida(s).`);
+    await carregarInstalacoes();
+    await carregarTitulares();
+  } catch (e) { alert(e.message); }
+};
+
 /* ============================ UPLOAD EXCEL ============================ */
 let arquivoExcel = null;
 const drop = $("excelDrop"), input = $("excelInput");
@@ -229,14 +313,17 @@ $("enviarExcelBtn").addEventListener("click", async () => {
   const fd = new FormData();
   fd.append("arquivo", arquivoExcel);
   if ($("uploadTitular").value) fd.append("titular_id", $("uploadTitular").value);
+  if ($("substituirChk").checked) fd.append("substituir", "true");
   setStatus("uploadStatus", "Importando…");
   $("enviarExcelBtn").disabled = true;
   try {
     const r = await api("/api/upload/excel", { method: "POST", body: fd });
-    let msg = `Importação concluída.\n${r.gravadas} linha(s) processada(s) de ${r.total_linhas}.`;
-    msg += `\n${r.faturas_unicas} fatura(s) única(s) gravada(s) (uma por instalação/mês).`;
-    if (r.duplicadas) msg += `\n⚠ ${r.duplicadas} linha(s) com instalação+mês repetidos no arquivo foram consolidadas (prevaleceu a última).`;
-    if (r.ignoradas) msg += `\n${r.ignoradas} linha(s) ignorada(s) (sem titular, instalação ou mês).`;
+    let msg = `Importação concluída (${r.modo === "substituir" ? "modo substituir" : "modo padrão"}). ${r.total_linhas} linha(s) lida(s).`;
+    msg += `\n✓ ${r.gravadas} fatura(s) nova(s) gravada(s).`;
+    if (r.atualizadas) msg += `\n↻ ${r.atualizadas} fatura(s) existente(s) sobrescrita(s).`;
+    if (r.duplicadas_arquivo) msg += `\n• ${r.duplicadas_arquivo} duplicata(s) dentro do arquivo.`;
+    if (r.duplicadas_banco) msg += `\n• ${r.duplicadas_banco} já existiam no banco (não reimportadas).`;
+    msg += `\nNenhuma linha foi descartada por campos faltantes.`;
     setStatus("uploadStatus", msg, "ok");
     await carregarTitulares();
   } catch (e) {
@@ -261,10 +348,9 @@ function parseMesKey(mk) { return String(mk || ""); }
 
 async function carregarAnalise() {
   setStatus("analiseStatus", "Carregando dados…");
-  const tid = $("fTitular").value, iid = $("fInstalacao").value;
+  const tids = msTitular ? msTitular.getSelected() : [];
   const qs = [];
-  if (tid) qs.push("titular_id=" + tid);
-  if (iid) qs.push("instalacao_id=" + iid);
+  if (tids.length) qs.push("titular_id=" + tids.join(","));
   try {
     faturas = await api("/api/faturas" + (qs.length ? "?" + qs.join("&") : ""));
     popularFiltrosAnalise();
@@ -276,14 +362,16 @@ async function carregarAnalise() {
 }
 
 function popularFiltrosAnalise() {
-  // instalacoes do titular selecionado
-  const tid = $("fTitular").value;
-  const insts = [...new Map(faturas.map((f) => [f.instalacao_codigo, f])).values()];
-  const selInst = $("fInstalacao");
-  const atualInst = selInst.value;
-  selInst.innerHTML = '<option value="">Todas</option>' +
-    insts.map((f) => `<option value="${f.instalacao_id}">${esc(f.instalacao_codigo)}${f.instalacao_apelido ? " — " + esc(f.instalacao_apelido) : ""}</option>`).join("");
-  if (atualInst) selInst.value = atualInst;
+  // instalacoes presentes nas faturas carregadas -> alimenta o multiselect
+  const insts = [...new Map(faturas.map((f) => [f.instalacao_id, f])).values()];
+  if (msInstalacao) {
+    msInstalacao.setOptions(
+      insts.map((f) => ({
+        value: f.instalacao_id,
+        label: f.instalacao_codigo + (f.instalacao_apelido ? " — " + f.instalacao_apelido : ""),
+      }))
+    );
+  }
 
   const anos = [...new Set(faturas.map((f) => f.ano).filter(Boolean))].sort();
   const selAno = $("fAno"); const atualAno = selAno.value;
@@ -296,18 +384,25 @@ function popularFiltrosAnalise() {
   if (atualB) selB.value = atualB;
 }
 
-["fTitular", "fInstalacao", "fAno", "fBandeira"].forEach((id) =>
-  $(id).addEventListener("change", () => {
-    if (id === "fTitular" || id === "fInstalacao") carregarAnalise();
-    else aplicarFiltrosAnalise();
+["fAno", "fBandeira"].forEach((id) => $(id).addEventListener("change", aplicarFiltrosAnalise));
+$("recarregarBtn").addEventListener("click", carregarAnalise);
+
+// Alterna o modo de visualizacao (consolidado x por instalacao) e redesenha.
+document.querySelectorAll("#segViz .seg-btn").forEach((btn) =>
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#segViz .seg-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    modoViz = btn.dataset.mode;
+    renderCharts();
   })
 );
-$("recarregarBtn").addEventListener("click", carregarAnalise);
 
 let filtradas = [];
 function aplicarFiltrosAnalise() {
   const ano = $("fAno").value, band = $("fBandeira").value;
+  const instSel = new Set(msInstalacao ? msInstalacao.getSelected() : []);
   filtradas = faturas
+    .filter((f) => instSel.size === 0 || instSel.has(String(f.instalacao_id)))
     .filter((f) => !ano || f.ano === ano)
     .filter((f) => !band || f.bandeira === band)
     .map((f) => ({
@@ -398,14 +493,74 @@ function agruparPorMes() {
   return rows;
 }
 
+// Agrupa por mes, separando uma serie por instalacao (para o modo comparativo).
+function agruparPorMesPorInstalacao() {
+  const keys = [...new Set(filtradas.map((r) => r.mes_key || r.mes))].sort();
+  const labelByKey = {};
+  filtradas.forEach((r) => { labelByKey[r.mes_key || r.mes] = r.mes || r.mes_key; });
+  const labels = keys.map((k) => labelByKey[k] || k);
+
+  const insts = new Map(); // instId -> { codigo, consumo:{}, total:{}, custo:{}, saldo:{} }
+  for (const r of filtradas) {
+    const k = r.mes_key || r.mes;
+    if (!insts.has(r.instalacao_id)) {
+      insts.set(r.instalacao_id, { codigo: r.instalacao_codigo + (r.instalacao_apelido ? " — " + r.instalacao_apelido : ""), consumo: {}, total: {}, saldo: {} });
+    }
+    const a = insts.get(r.instalacao_id);
+    a.consumo[k] = (a.consumo[k] || 0) + r.consumo;
+    a.total[k] = (a.total[k] || 0) + r.total;
+    a.saldo[k] = r.saldo; // saldo e um estado (ultimo do mes), nao soma
+  }
+  return { keys, labels, insts };
+}
+
+// Paleta de cores estavel por indice.
+const PALETA = ["#3146a3", "#c79a3a", "#12805c", "#b42318", "#5468c7", "#0e7490", "#9333ea", "#b76a00", "#2563eb", "#16a34a", "#db2777", "#475569"];
+const corDe = (i) => PALETA[i % PALETA.length];
+
 function renderCharts() {
   Object.values(charts).forEach((c) => c && c.destroy());
   charts = {};
   if (typeof Chart === "undefined") return;
-  const rows = agruparPorMes();
-  const labels = rows.map((r) => r.label);
   const base = { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: "#44506b" } }, y: { ticks: { color: "#44506b" } } } };
   const C = (id, cfg) => { const el = $(id); if (el) charts[id] = new Chart(el, cfg); };
+  const setTitulo = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+
+  // Titulo do 4o grafico depende do modo (no comparativo mostra apenas saldo por UC).
+  setTitulo("tConsumo", "Consumo faturado (kWh)");
+  setTitulo("tValor", "Total a pagar (R$)");
+  setTitulo("tCusto", "Custo por kWh (R$)");
+  setTitulo("tSaldo", modoViz === "instalacao" ? "Saldo por instalação (kWh)" : "Saldo × Energia injetada (kWh)");
+
+  if (modoViz === "instalacao") {
+    // Uma serie (linha) por instalacao em cada grafico -> comparativo.
+    const { keys, labels, insts } = agruparPorMesPorInstalacao();
+    const entradas = [...insts.entries()];
+    const mkDatasets = (campo) =>
+      entradas.map(([id, d], i) => ({
+        label: d.codigo,
+        data: keys.map((k) => d[campo][k] ?? null),
+        borderColor: corDe(i),
+        backgroundColor: corDe(i),
+        tension: .3,
+        spanGaps: true,
+      }));
+    const custoDatasets = entradas.map(([id, d], i) => ({
+      label: d.codigo,
+      data: keys.map((k) => (d.consumo[k] > 0 ? d.total[k] / d.consumo[k] : null)),
+      borderColor: corDe(i), backgroundColor: corDe(i), tension: .3, spanGaps: true,
+    }));
+    const legenda = { legend: { display: true, position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } };
+    C("cConsumo", { type: "line", data: { labels, datasets: mkDatasets("consumo") }, options: { ...base, plugins: legenda } });
+    C("cValor", { type: "line", data: { labels, datasets: mkDatasets("total") }, options: { ...base, plugins: legenda } });
+    C("cCusto", { type: "line", data: { labels, datasets: custoDatasets }, options: { ...base, plugins: legenda } });
+    C("cSaldo", { type: "line", data: { labels, datasets: mkDatasets("saldo") }, options: { ...base, plugins: legenda } });
+    return;
+  }
+
+  // Modo consolidado: todas as instalacoes somadas em uma serie.
+  const rows = agruparPorMes();
+  const labels = rows.map((r) => r.label);
   C("cConsumo", { type: "line", data: { labels, datasets: [{ label: "Consumo", data: rows.map((r) => r.consumo), borderColor: "#3146a3", backgroundColor: "rgba(49,70,163,.12)", fill: true, tension: .3 }] }, options: { ...base, plugins: { legend: { display: false } } } });
   C("cValor", { type: "bar", data: { labels, datasets: [{ label: "Total", data: rows.map((r) => r.total), backgroundColor: "#1a2456" }] }, options: { ...base, plugins: { legend: { display: false } } } });
   C("cCusto", { type: "line", data: { labels, datasets: [{ label: "Custo/kWh", data: rows.map((r) => r.custo), borderColor: "#c79a3a", backgroundColor: "rgba(199,154,58,.14)", fill: true, tension: .3 }] }, options: { ...base, plugins: { legend: { display: false } } } });
@@ -430,4 +585,6 @@ $("exportResumoBtn").addEventListener("click", () => {
 });
 
 /* ============================ INIT ============================ */
+msTitular = new MultiSelect("msTitular", { placeholder: "Todos os titulares", onChange: () => carregarAnalise() });
+msInstalacao = new MultiSelect("msInstalacao", { placeholder: "Todas as instalações", onChange: () => aplicarFiltrosAnalise() });
 carregarTitulares().catch((e) => console.error(e));
