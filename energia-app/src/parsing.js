@@ -62,6 +62,14 @@ function pick(row, ...keys) {
   return "";
 }
 
+// Remove zeros a esquerda do numero de instalacao ("0069589968" -> "69589968").
+export function normalizarCodigo(c) {
+  const s = String(c ?? "").trim();
+  if (!s) return "";
+  const stripped = s.replace(/^0+/, "");
+  return stripped || "0";
+}
+
 export function normalizarLinha(row) {
   const mesRaw = pick(row, "Mês", "Mes", "mes");
   const mesInfo = parseMes(mesRaw);
@@ -75,7 +83,7 @@ export function normalizarLinha(row) {
   return {
     distribuidora: String(pick(row, "Distribuidora", "distribuidora")).trim(),
     titular: String(pick(row, "Titular", "titular", "Cliente", "Nome")).trim(),
-    instalacao: String(pick(row, "Instalação", "Instalacao", "UC", "instalacao")).trim(),
+    instalacao: normalizarCodigo(pick(row, "Instalação", "Instalacao", "UC", "instalacao")),
     apelido: String(pick(row, "Apelido", "Nome da Instalação", "Nome da Instalacao")).trim(),
     mes: String(mesRaw).trim(),
     mesLabel: mesInfo.label || String(mesRaw).trim(),
