@@ -71,6 +71,71 @@ app.delete("/api/titulares/:id", wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Unifica titulares: move instalacoes/faturas das origens para o destino e remove as origens.
+// Instalacoes de mesmo codigo sao mescladas; faturas com mes ja existente no destino sao descartadas.
+app.post("/api/titulares/merge", wrap(async (req, res) => {
+  const destino = Number(req.body.destino_id);
+  const origens = (req.body.origem_ids || [])
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n !== destino);
+  if (!destino || !origens.length) {
+    return res.status(400).json({ erro: "Informe o titular de destino e ao menos uma origem." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    let instMovidas = 0, instMescladas = 0, faturasMovidas = 0, faturasDescartadas = 0;
+
+    for (const org of origens) {
+      const insts = await client.query(
+        `SELECT id, codigo FROM instalacoes WHERE titular_id = $1`, [org]
+      );
+      for (const inst of insts.rows) {
+        const ex = await client.query(
+          `SELECT id FROM instalacoes WHERE titular_id = $1 AND codigo = $2 LIMIT 1`,
+          [destino, inst.codigo]
+        );
+        if (!ex.rows.length) {
+          // Sem conflito: apenas reaponta a instalacao para o destino.
+          await client.query(`UPDATE instalacoes SET titular_id = $1 WHERE id = $2`, [destino, inst.id]);
+          instMovidas++;
+        } else {
+          // Conflito: mescla faturas na instalacao de destino (sem duplicar mes).
+          const destInst = ex.rows[0].id;
+          const mv = await client.query(
+            `UPDATE faturas SET instalacao_id = $1
+             WHERE instalacao_id = $2
+               AND mes_key NOT IN (SELECT mes_key FROM faturas WHERE instalacao_id = $1)`,
+            [destInst, inst.id]
+          );
+          faturasMovidas += mv.rowCount;
+          const del = await client.query(`DELETE FROM faturas WHERE instalacao_id = $1`, [inst.id]);
+          faturasDescartadas += del.rowCount;
+          await client.query(`DELETE FROM instalacoes WHERE id = $1`, [inst.id]);
+          instMescladas++;
+        }
+      }
+      await client.query(`DELETE FROM titulares WHERE id = $1`, [org]);
+    }
+
+    await client.query("COMMIT");
+    res.json({
+      ok: true,
+      titulares_removidos: origens.length,
+      instalacoes_movidas: instMovidas,
+      instalacoes_mescladas: instMescladas,
+      faturas_movidas: faturasMovidas,
+      faturas_descartadas: faturasDescartadas,
+    });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}));
+
 /* ============================ INSTALACOES ============================ */
 
 app.get("/api/instalacoes", wrap(async (req, res) => {
