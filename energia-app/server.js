@@ -172,11 +172,23 @@ app.post("/api/instalacoes", wrap(async (req, res) => {
 }));
 
 app.put("/api/instalacoes/:id", wrap(async (req, res) => {
-  const { codigo, apelido, endereco, distribuidora } = req.body;
+  const { titular_id, codigo, apelido, endereco, distribuidora } = req.body;
+  if (!titular_id || !codigo) return res.status(400).json({ erro: "titular_id e codigo sao obrigatorios." });
+  const cod = normalizarCodigo(codigo);
+  // Verifica conflito: o titular de destino ja tem outra instalacao com este codigo?
+  const conflito = await query(
+    `SELECT id FROM instalacoes WHERE titular_id = $1 AND codigo = $2 AND id <> $3 LIMIT 1`,
+    [titular_id, cod, req.params.id]
+  );
+  if (conflito.rows.length) {
+    return res.status(409).json({
+      erro: "O titular de destino já possui uma instalação com este código. Use 'Unificar titulares' para mesclar, ou ajuste o código.",
+    });
+  }
   const { rows } = await query(
-    `UPDATE instalacoes SET codigo=$1, apelido=$2, endereco=$3, distribuidora=$4
-     WHERE id=$5 RETURNING *`,
-    [normalizarCodigo(codigo), apelido || null, endereco || null, distribuidora || null, req.params.id]
+    `UPDATE instalacoes SET titular_id=$1, codigo=$2, apelido=$3, endereco=$4, distribuidora=$5
+     WHERE id=$6 RETURNING *`,
+    [titular_id, cod, apelido || null, endereco || null, distribuidora || null, req.params.id]
   );
   if (!rows.length) return res.status(404).json({ erro: "Instalacao nao encontrada." });
   res.json(rows[0]);
