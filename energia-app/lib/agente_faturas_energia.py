@@ -22,14 +22,8 @@ except ImportError:
     print("ERRO: pdfplumber não instalado. Execute: pip install pdfplumber")
     sys.exit(1)
 
-try:
-    import openpyxl
-    from openpyxl import Workbook
-    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-    from openpyxl.utils import get_column_letter
-except ImportError:
-    print("ERRO: openpyxl não instalado. Execute: pip install openpyxl")
-    sys.exit(1)
+# openpyxl é importado de forma preguiçosa dentro de gerar_excel(),
+# pois o modo --json (usado pelo backend) não precisa gerar Excel.
 
 
 # ─────────────────────────────────────────────────────────────
@@ -462,7 +456,25 @@ def _border():
     s = Side(style="thin", color="BFBFBF")
     return Border(left=s, right=s, top=s, bottom=s)
 
+def _carregar_openpyxl():
+    """Importa openpyxl sob demanda e expoe os simbolos como globais do modulo.
+    Assim o modo --json (backend) nao depende de openpyxl."""
+    try:
+        import openpyxl
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        print("ERRO: openpyxl não instalado. Execute: pip install openpyxl")
+        sys.exit(1)
+    globals().update(dict(
+        openpyxl=openpyxl, Workbook=Workbook, PatternFill=PatternFill, Font=Font,
+        Alignment=Alignment, Border=Border, Side=Side, get_column_letter=get_column_letter,
+    ))
+
+
 def gerar_excel(registros: list, caminho: str):
+    _carregar_openpyxl()
     wb  = Workbook()
     ws  = wb.active
     ws.title = "Faturas"
