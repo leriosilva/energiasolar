@@ -207,3 +207,10 @@ tbody tr:nth-child(even){background:#fbfcff}
 .merge-list label:hover{background:#f3f6fd}
 .merge-list input{width:auto; margin:0}
 .merge-list .muted-empty{color:var(--muted); font-size:13px; padding:8px}
+
+/* ---------- Sortable table headers ---------- */
+th[data-col]{cursor:pointer; user-select:none; white-space:nowrap}
+th[data-col]:hover{color:var(--blue)}
+th[data-col]::after{content:"⇅"; opacity:.3; margin-left:6px; font-size:10px}
+th[data-col].sort-asc::after{content:"▲"; opacity:.95}
+th[data-col].sort-desc::after{content:"▼"; opacity:.95}

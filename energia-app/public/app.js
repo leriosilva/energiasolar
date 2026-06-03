@@ -16,6 +16,50 @@ let titulares = [];
 let charts = {};
 let modoViz = "consolidado"; // "consolidado" | "instalacao"
 
+/* ---------------- Ordenação / filtro genéricos de tabela ---------------- */
+const sortState = {
+  inst: { col: null, dir: "asc" },
+  cons: { col: null, dir: "asc" },
+  anal: { col: null, dir: "asc" },
+};
+
+function ordenarRows(rows, state) {
+  if (!state || !state.col) return rows;
+  const dir = state.dir === "desc" ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const va = a[state.col], vb = b[state.col];
+    const na = typeof va === "number", nb = typeof vb === "number";
+    if (na && nb) return (va - vb) * dir;
+    return String(va ?? "").localeCompare(String(vb ?? ""), "pt-BR", { numeric: true, sensitivity: "base" }) * dir;
+  });
+}
+
+function filtrarRows(rows, termo, campos) {
+  const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const t = norm(termo).trim();
+  if (!t) return rows;
+  return rows.filter((r) => campos.some((c) => norm(r[c]).includes(t)));
+}
+
+function atualizarIndicadores(tableId, state) {
+  document.querySelectorAll(`#${tableId} thead th[data-col]`).forEach((th) => {
+    th.classList.remove("sort-asc", "sort-desc");
+    if (th.dataset.col === state.col) th.classList.add(state.dir === "desc" ? "sort-desc" : "sort-asc");
+  });
+}
+
+function wireSort(tableId, state, onRender) {
+  document.querySelectorAll(`#${tableId} thead th[data-col]`).forEach((th) => {
+    th.addEventListener("click", () => {
+      const col = th.dataset.col;
+      if (state.col === col) state.dir = state.dir === "asc" ? "desc" : "asc";
+      else { state.col = col; state.dir = "asc"; }
+      atualizarIndicadores(tableId, state);
+      onRender();
+    });
+  });
+}
+
 /* ---------------- Multiselect ---------------- */
 class MultiSelect {
   constructor(containerId, { placeholder = "Todos", onChange } = {}) {
@@ -252,15 +296,22 @@ function preencherSelectTitulares(sel, comAuto, allLabel) {
 }
 
 /* ============================ INSTALAÇÕES ============================ */
+let instData = [];
 async function carregarInstalacoes() {
   const tid = $("filtroTitularInst").value;
-  const lista = await api("/api/instalacoes" + (tid ? `?titular_id=${tid}` : ""));
+  instData = await api("/api/instalacoes" + (tid ? `?titular_id=${tid}` : ""));
+  renderInstalacoesTabela();
+}
+
+function renderInstalacoesTabela() {
   const tbody = $("instalacoesBody");
-  if (!lista.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhuma instalação cadastrada.</td></tr>';
+  let rows = filtrarRows(instData, $("filtroInstTexto").value, ["titular_nome", "codigo", "apelido", "distribuidora", "endereco"]);
+  rows = ordenarRows(rows, sortState.inst);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhuma instalação encontrada.</td></tr>';
     return;
   }
-  tbody.innerHTML = lista
+  tbody.innerHTML = rows
     .map(
       (i) => `<tr>
       <td>${esc(i.titular_nome)}</td>
@@ -279,6 +330,8 @@ async function carregarInstalacoes() {
     .join("");
 }
 $("filtroTitularInst").addEventListener("change", carregarInstalacoes);
+$("filtroInstTexto").addEventListener("input", renderInstalacoesTabela);
+wireSort("tblInstalacoes", sortState.inst, renderInstalacoesTabela);
 
 $("novaInstalacaoBtn").addEventListener("click", () => {
   if (!titulares.length) return alert("Cadastre um titular antes de criar instalações.");
@@ -493,43 +546,63 @@ function atualizarKPIs() {
   $("kpiSaldo").textContent = fmtNum(saldoFinalPorInstalacao(filtradas), 1) + " kWh";
 }
 
+let consData = [];
 function renderConsolidado() {
   const tbody = $("consolidadoBody");
-  if (!filtradas.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">Sem dados.</td></tr>'; return; }
   const mapa = new Map();
   for (const r of filtradas) {
     const k = r.instalacao_id;
-    if (!mapa.has(k)) mapa.set(k, { titular: r.titular_nome, cod: r.instalacao_codigo, ap: r.instalacao_apelido, qtd: 0, consumo: 0, total: 0, inj: 0, saldo: 0, ult: "" });
+    if (!mapa.has(k)) mapa.set(k, { titular: r.titular_nome, cod: (r.instalacao_codigo || "") + (r.instalacao_apelido ? " — " + r.instalacao_apelido : ""), qtd: 0, consumo: 0, total: 0, inj: 0, saldo: 0, custo: 0, ult: "" });
     const a = mapa.get(k);
     a.qtd++; a.consumo += r.consumo; a.total += r.total; a.inj += r.inj;
     if (!a.ult || String(r.mes_key) >= a.ult) { a.ult = String(r.mes_key); a.saldo = r.saldo; }
   }
-  tbody.innerHTML = [...mapa.values()].map((r) => {
-    const custo = r.consumo > 0 ? r.total / r.consumo : 0;
-    return `<tr>
+  consData = [...mapa.values()];
+  consData.forEach((r) => (r.custo = r.consumo > 0 ? r.total / r.consumo : 0));
+  renderConsolidadoTabela();
+}
+
+function renderConsolidadoTabela() {
+  const tbody = $("consolidadoBody");
+  let rows = filtrarRows(consData, $("filtroConsTexto").value, ["titular", "cod"]);
+  rows = ordenarRows(rows, sortState.cons);
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">Sem dados.</td></tr>'; return; }
+  tbody.innerHTML = rows.map((r) => `<tr>
       <td>${esc(r.titular)}</td>
-      <td>${esc(r.cod)}${r.ap ? " — " + esc(r.ap) : ""}</td>
+      <td>${esc(r.cod)}</td>
       <td>${fmtNum(r.qtd)}</td><td>${fmtNum(r.consumo, 1)}</td><td>${fmtMoeda(r.total)}</td>
-      <td>${fmtMoeda(custo)}</td><td>${fmtNum(r.saldo, 1)}</td><td>${fmtNum(r.inj, 1)}</td>
-    </tr>`;
-  }).join("");
+      <td>${fmtMoeda(r.custo)}</td><td>${fmtNum(r.saldo, 1)}</td><td>${fmtNum(r.inj, 1)}</td>
+    </tr>`).join("");
 }
 
 function renderAnalitica() {
+  renderAnaliticaTabela();
+}
+
+function renderAnaliticaTabela() {
   const tbody = $("analiticaBody");
-  if (!filtradas.length) { tbody.innerHTML = '<tr><td colspan="12" class="empty">Sem dados.</td></tr>'; return; }
-  tbody.innerHTML = filtradas.map((r) => {
+  let rows = filtradas.map((r) => ({ ...r, mes_disp: r.mes || r.mes_key }));
+  rows = filtrarRows(rows, $("filtroAnalTexto").value, ["titular_nome", "instalacao_codigo", "mes_disp", "vencimento", "bandeira", "status"]);
+  rows = ordenarRows(rows, sortState.anal);
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="12" class="empty">Sem dados.</td></tr>'; return; }
+  tbody.innerHTML = rows.map((r) => {
     let cls = "ok";
     if ((r.status || "").toLowerCase().includes("parcial")) cls = "warn";
     if ((r.status || "").toLowerCase().includes("erro")) cls = "err";
     return `<tr>
-      <td>${esc(r.titular_nome)}</td><td>${esc(r.instalacao_codigo)}</td><td>${esc(r.mes || r.mes_key)}</td><td>${esc(r.vencimento || "—")}</td>
+      <td>${esc(r.titular_nome)}</td><td>${esc(r.instalacao_codigo)}</td><td>${esc(r.mes_disp)}</td><td>${esc(r.vencimento || "—")}</td>
       <td>${fmtNum(r.consumo, 1)}</td><td>${fmtNum(r.dias)}</td><td>${fmtMoeda(r.total)}</td><td>${fmtMoeda(r.custo)}</td>
       <td>${esc(r.bandeira || "—")}</td><td>${fmtNum(r.saldo, 1)}</td><td>${fmtNum(r.inj, 1)}</td>
       <td><span class="badge ${cls}">${esc(r.status || "OK")}</span></td>
     </tr>`;
   }).join("");
 }
+
+// Filtros de texto e ordenação das tabelas da análise
+$("filtroConsTexto").addEventListener("input", renderConsolidadoTabela);
+$("filtroAnalTexto").addEventListener("input", renderAnaliticaTabela);
+wireSort("tblConsolidado", sortState.cons, renderConsolidadoTabela);
+wireSort("tblAnalitica", sortState.anal, renderAnaliticaTabela);
 
 function agruparPorMes() {
   const mapa = new Map();

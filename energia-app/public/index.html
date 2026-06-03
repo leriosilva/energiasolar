@@ -72,10 +72,13 @@
         <button id="novaInstalacaoBtn">+ Nova instalação</button>
       </div>
 
+      <div class="toolbar" style="margin-bottom:0">
+        <div class="grow"><input id="filtroInstTexto" placeholder="Filtrar nesta tabela (titular, código, apelido, distribuidora…)" /></div>
+      </div>
       <div class="table-wrap">
-        <table>
+        <table id="tblInstalacoes">
           <thead><tr>
-            <th>Titular</th><th>Código (UC)</th><th>Apelido</th><th>Distribuidora</th><th>Endereço</th><th>Faturas</th><th></th>
+            <th data-col="titular_nome">Titular</th><th data-col="codigo">Código (UC)</th><th data-col="apelido">Apelido</th><th data-col="distribuidora">Distribuidora</th><th data-col="endereco">Endereço</th><th data-col="qtd_faturas">Faturas</th><th></th>
           </tr></thead>
           <tbody id="instalacoesBody"><tr><td colspan="7" class="empty">Nenhuma instalação cadastrada.</td></tr></tbody>
         </table>
@@ -187,10 +190,11 @@
 
       <div class="block">
         <h3>Consolidação por instalação</h3>
+        <div class="toolbar" style="margin-bottom:0"><div class="grow"><input id="filtroConsTexto" placeholder="Filtrar nesta tabela…" /></div></div>
         <div class="table-wrap">
-          <table>
+          <table id="tblConsolidado">
             <thead><tr>
-              <th>Titular</th><th>Instalação</th><th>Qtd. faturas</th><th>Consumo total (kWh)</th><th>Total pago</th><th>Custo médio/kWh</th><th>Saldo final</th><th>Injetada total</th>
+              <th data-col="titular">Titular</th><th data-col="cod">Instalação</th><th data-col="qtd">Qtd. faturas</th><th data-col="consumo">Consumo total (kWh)</th><th data-col="total">Total pago</th><th data-col="custo">Custo médio/kWh</th><th data-col="saldo">Saldo final</th><th data-col="inj">Injetada total</th>
             </tr></thead>
             <tbody id="consolidadoBody"><tr><td colspan="8" class="empty">Sem dados.</td></tr></tbody>
           </table>
@@ -199,10 +203,11 @@
 
       <div class="block">
         <h3>Tabela analítica</h3>
+        <div class="toolbar" style="margin-bottom:0"><div class="grow"><input id="filtroAnalTexto" placeholder="Filtrar nesta tabela…" /></div></div>
         <div class="table-wrap">
-          <table>
+          <table id="tblAnalitica">
             <thead><tr>
-              <th>Titular</th><th>Instalação</th><th>Mês</th><th>Vencimento</th><th>Consumo (kWh)</th><th># Dias</th><th>Total</th><th>Custo/kWh</th><th>Bandeira</th><th>Saldo</th><th>Injetada</th><th>Status</th>
+              <th data-col="titular_nome">Titular</th><th data-col="instalacao_codigo">Instalação</th><th data-col="mes_key">Mês</th><th data-col="vencimento">Vencimento</th><th data-col="consumo">Consumo (kWh)</th><th data-col="dias"># Dias</th><th data-col="total">Total</th><th data-col="custo">Custo/kWh</th><th data-col="bandeira">Bandeira</th><th data-col="saldo">Saldo</th><th data-col="inj">Injetada</th><th data-col="status">Status</th>
             </tr></thead>
             <tbody id="analiticaBody"><tr><td colspan="12" class="empty">Sem dados.</td></tr></tbody>
           </table>
