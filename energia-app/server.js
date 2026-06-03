@@ -369,7 +369,10 @@ function extrairPdfsParaJson(caminhos) {
     proc.stderr.on("data", (d) => (err += d));
     proc.on("error", (e) => reject(new Error("Falha ao executar o Python: " + e.message)));
     proc.on("close", (code) => {
-      if (code !== 0) return reject(new Error("Agente Python falhou (cod " + code + "): " + err.slice(0, 500)));
+      if (code !== 0) {
+        const detalhe = (err || out || "").trim().slice(0, 500);
+        return reject(new Error("Agente Python falhou (cod " + code + "): " + (detalhe || "sem detalhes")));
+      }
       try {
         resolve(JSON.parse(out || "[]"));
       } catch (e) {
