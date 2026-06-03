@@ -106,6 +106,10 @@
             <button id="enviarExcelBtn" disabled>Importar planilha</button>
             <button id="baixarTemplateBtn" class="secondary">Baixar modelo (.xlsx)</button>
           </div>
+          <label class="check-line" style="margin-top:12px">
+            <input type="checkbox" id="substituirChk" />
+            <span>Substituir faturas existentes (sobrescreve em vez de ignorar duplicatas)</span>
+          </label>
           <div class="status" id="uploadStatus">Aguardando arquivo…</div>
         </div>
 
@@ -129,9 +133,10 @@
           </div>
           <div class="note">
             • <strong>Mês</strong> aceita <code>MM/AAAA</code> (ex.: 01/2025) ou <code>MMM/AA</code> (ex.: JAN/25).<br>
-            • <strong>Titular*</strong> é obrigatório apenas se você não escolher um titular no seletor ao lado.<br>
-            • Valores monetários e numéricos aceitam o formato brasileiro (1.234,56).<br>
-            • Faturas com mesmo titular + instalação + mês são <strong>atualizadas</strong> (não duplicam).
+            • Se não houver titular (seletor ou coluna), as linhas vão para um titular <strong>“(Sem titular)”</strong> — nada é descartado.<br>
+            • <strong>Zeros à esquerda</strong> do número de instalação são ignorados (0069589968 = 69589968).<br>
+            • Valores aceitam o formato brasileiro (1.234,56) e colunas com unidade, como <code>Total a Pagar (R$)</code>.<br>
+            • Faturas <strong>duplicadas</strong> (mesma instalação + mês, no arquivo ou já no banco) <strong>não são reimportadas</strong>.
           </div>
         </div>
       </div>
@@ -143,10 +148,16 @@
       <p class="subtitle">Indicadores consolidados a partir das faturas armazenadas.</p>
 
       <div class="toolbar">
-        <div style="min-width:200px"><label>Titular</label><select id="fTitular"><option value="">Todos</option></select></div>
-        <div style="min-width:200px"><label>Instalação</label><select id="fInstalacao"><option value="">Todas</option></select></div>
-        <div style="min-width:130px"><label>Ano</label><select id="fAno"><option value="">Todos</option></select></div>
+        <div style="min-width:230px"><label>Titulares</label><div class="ms" id="msTitular"></div></div>
+        <div style="min-width:230px"><label>Instalações</label><div class="ms" id="msInstalacao"></div></div>
+        <div style="min-width:120px"><label>Ano</label><select id="fAno"><option value="">Todos</option></select></div>
         <div style="min-width:140px"><label>Bandeira</label><select id="fBandeira"><option value="">Todas</option></select></div>
+        <div style="min-width:230px"><label>Visualização dos dados</label>
+          <div class="seg" id="segViz">
+            <button type="button" class="seg-btn active" data-mode="consolidado">Consolidado</button>
+            <button type="button" class="seg-btn" data-mode="instalacao">Por instalação</button>
+          </div>
+        </div>
         <button id="recarregarBtn" class="secondary">Recarregar</button>
         <button id="exportResumoBtn" class="secondary" disabled>Exportar resumo (.xlsx)</button>
       </div>
@@ -164,12 +175,12 @@
       <div class="block">
         <h3>Dashboard mês a mês</h3>
         <div class="grid cols-2">
-          <div class="chart-box"><h4>Consumo faturado (kWh)</h4><div class="chart-wrap"><canvas id="cConsumo"></canvas></div></div>
-          <div class="chart-box"><h4>Total a pagar (R$)</h4><div class="chart-wrap"><canvas id="cValor"></canvas></div></div>
+          <div class="chart-box"><h4 id="tConsumo">Consumo faturado (kWh)</h4><div class="chart-wrap"><canvas id="cConsumo"></canvas></div></div>
+          <div class="chart-box"><h4 id="tValor">Total a pagar (R$)</h4><div class="chart-wrap"><canvas id="cValor"></canvas></div></div>
         </div>
         <div class="grid cols-2" style="margin-top:16px">
-          <div class="chart-box"><h4>Custo por kWh (R$)</h4><div class="chart-wrap"><canvas id="cCusto"></canvas></div></div>
-          <div class="chart-box"><h4>Saldo × Energia injetada (kWh)</h4><div class="chart-wrap"><canvas id="cSaldo"></canvas></div></div>
+          <div class="chart-box"><h4 id="tCusto">Custo por kWh (R$)</h4><div class="chart-wrap"><canvas id="cCusto"></canvas></div></div>
+          <div class="chart-box"><h4 id="tSaldo">Saldo × Energia injetada (kWh)</h4><div class="chart-wrap"><canvas id="cSaldo"></canvas></div></div>
         </div>
       </div>
 
