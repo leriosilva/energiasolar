@@ -77,6 +77,49 @@ app.delete("/api/titulares/:id", wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Move instalacoes/faturas de um titular origem para o destino (dentro de uma transacao).
+async function mergeOrigemNoDestino(client, destino, org, acc) {
+  const insts = await client.query(`SELECT id, codigo FROM instalacoes WHERE titular_id = $1`, [org]);
+  for (const inst of insts.rows) {
+    const ex = await client.query(
+      `SELECT id FROM instalacoes WHERE titular_id = $1 AND codigo = $2 LIMIT 1`,
+      [destino, inst.codigo]
+    );
+    if (!ex.rows.length) {
+      await client.query(`UPDATE instalacoes SET titular_id = $1 WHERE id = $2`, [destino, inst.id]);
+      acc.instMovidas++;
+    } else {
+      const destInst = ex.rows[0].id;
+      const mv = await client.query(
+        `UPDATE faturas SET instalacao_id = $1
+         WHERE instalacao_id = $2
+           AND mes_key NOT IN (SELECT mes_key FROM faturas WHERE instalacao_id = $1)`,
+        [destInst, inst.id]
+      );
+      acc.faturasMovidas += mv.rowCount;
+      const del = await client.query(`DELETE FROM faturas WHERE instalacao_id = $1`, [inst.id]);
+      acc.faturasDescartadas += del.rowCount;
+      await client.query(`DELETE FROM instalacoes WHERE id = $1`, [inst.id]);
+      acc.instMescladas++;
+    }
+  }
+  await client.query(`DELETE FROM titulares WHERE id = $1`, [org]);
+  acc.titularesRemovidos++;
+}
+
+function novoAcc() {
+  return { instMovidas: 0, instMescladas: 0, faturasMovidas: 0, faturasDescartadas: 0, titularesRemovidos: 0 };
+}
+function accParaJson(acc) {
+  return {
+    titulares_removidos: acc.titularesRemovidos,
+    instalacoes_movidas: acc.instMovidas,
+    instalacoes_mescladas: acc.instMescladas,
+    faturas_movidas: acc.faturasMovidas,
+    faturas_descartadas: acc.faturasDescartadas,
+  };
+}
+
 // Unifica titulares: move instalacoes/faturas das origens para o destino e remove as origens.
 // Instalacoes de mesmo codigo sao mescladas; faturas com mes ja existente no destino sao descartadas.
 app.post("/api/titulares/merge", wrap(async (req, res) => {
@@ -91,49 +134,48 @@ app.post("/api/titulares/merge", wrap(async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    let instMovidas = 0, instMescladas = 0, faturasMovidas = 0, faturasDescartadas = 0;
-
-    for (const org of origens) {
-      const insts = await client.query(
-        `SELECT id, codigo FROM instalacoes WHERE titular_id = $1`, [org]
-      );
-      for (const inst of insts.rows) {
-        const ex = await client.query(
-          `SELECT id FROM instalacoes WHERE titular_id = $1 AND codigo = $2 LIMIT 1`,
-          [destino, inst.codigo]
-        );
-        if (!ex.rows.length) {
-          // Sem conflito: apenas reaponta a instalacao para o destino.
-          await client.query(`UPDATE instalacoes SET titular_id = $1 WHERE id = $2`, [destino, inst.id]);
-          instMovidas++;
-        } else {
-          // Conflito: mescla faturas na instalacao de destino (sem duplicar mes).
-          const destInst = ex.rows[0].id;
-          const mv = await client.query(
-            `UPDATE faturas SET instalacao_id = $1
-             WHERE instalacao_id = $2
-               AND mes_key NOT IN (SELECT mes_key FROM faturas WHERE instalacao_id = $1)`,
-            [destInst, inst.id]
-          );
-          faturasMovidas += mv.rowCount;
-          const del = await client.query(`DELETE FROM faturas WHERE instalacao_id = $1`, [inst.id]);
-          faturasDescartadas += del.rowCount;
-          await client.query(`DELETE FROM instalacoes WHERE id = $1`, [inst.id]);
-          instMescladas++;
-        }
-      }
-      await client.query(`DELETE FROM titulares WHERE id = $1`, [org]);
-    }
-
+    const acc = novoAcc();
+    for (const org of origens) await mergeOrigemNoDestino(client, destino, org, acc);
     await client.query("COMMIT");
-    res.json({
-      ok: true,
-      titulares_removidos: origens.length,
-      instalacoes_movidas: instMovidas,
-      instalacoes_mescladas: instMescladas,
-      faturas_movidas: faturasMovidas,
-      faturas_descartadas: faturasDescartadas,
-    });
+    res.json({ ok: true, ...accParaJson(acc) });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}));
+
+// Unifica automaticamente todos os titulares que tenham o mesmo nome (duplicados).
+// Em cada grupo, o destino e o titular com mais faturas (desempate: menor id).
+app.post("/api/titulares/merge-duplicados", wrap(async (req, res) => {
+  const { rows } = await query(`
+    SELECT t.id, t.nome,
+      (SELECT COUNT(*) FROM faturas f JOIN instalacoes i ON i.id = f.instalacao_id WHERE i.titular_id = t.id) AS qtd_faturas
+    FROM titulares t ORDER BY t.id
+  `);
+  const grupos = new Map();
+  for (const t of rows) {
+    const key = String(t.nome || "").trim().toLowerCase();
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push(t);
+  }
+  const dups = [...grupos.values()].filter((g) => g.length > 1);
+  if (!dups.length) {
+    return res.json({ ok: true, grupos: 0, ...accParaJson(novoAcc()), mensagem: "Nenhum titular duplicado encontrado." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const acc = novoAcc();
+    for (const g of dups) {
+      const destinoT = g.slice().sort((a, b) => (Number(b.qtd_faturas) - Number(a.qtd_faturas)) || (a.id - b.id))[0];
+      const origens = g.filter((t) => t.id !== destinoT.id);
+      for (const org of origens) await mergeOrigemNoDestino(client, destinoT.id, org.id, acc);
+    }
+    await client.query("COMMIT");
+    res.json({ ok: true, grupos: dups.length, ...accParaJson(acc) });
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
