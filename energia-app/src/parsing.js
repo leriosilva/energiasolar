@@ -70,6 +70,11 @@ export function normalizarCodigo(c) {
   return stripped || "0";
 }
 
+// Remove acentos/diacriticos de um texto ("Paróquia" -> "Paroquia", "José" -> "Jose").
+export function removerAcentos(s) {
+  return String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 export function normalizarLinha(row) {
   const mesRaw = pick(row, "Mês", "Mes", "mes");
   const mesInfo = parseMes(mesRaw);
