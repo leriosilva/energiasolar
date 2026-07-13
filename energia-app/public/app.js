@@ -237,9 +237,14 @@ window.limparFaturasTitular = async (id) => {
 };
 
 /* ---------------- Unificar titulares ---------------- */
+// Rótulo que distingue titulares de mesmo nome (id + contadores).
+function rotuloTitular(t) {
+  return `${t.nome} — #${t.id} (${t.qtd_instalacoes} inst · ${t.qtd_faturas} fat)`;
+}
+
 $("unificarBtn").addEventListener("click", () => {
   if (titulares.length < 2) return alert("É preciso ter ao menos dois titulares para unificar.");
-  $("mergeDestino").innerHTML = titulares.map((t) => `<option value="${t.id}">${esc(t.nome)}</option>`).join("");
+  $("mergeDestino").innerHTML = titulares.map((t) => `<option value="${t.id}">${esc(rotuloTitular(t))}</option>`).join("");
   renderMergeOrigens();
   abrirModal("modalMerge");
 });
@@ -251,9 +256,28 @@ function renderMergeOrigens() {
   const cont = $("mergeOrigens");
   if (!origens.length) { cont.innerHTML = '<div class="muted-empty">Nenhum outro titular disponível.</div>'; return; }
   cont.innerHTML = origens
-    .map((t) => `<label><input type="checkbox" value="${t.id}"><span>${esc(t.nome)} <span class="small">(${t.qtd_instalacoes} inst. · ${t.qtd_faturas} fat.)</span></span></label>`)
+    .map((t) => `<label><input type="checkbox" value="${t.id}"><span>${esc(t.nome)} <span class="small">#${t.id} · ${t.qtd_instalacoes} inst · ${t.qtd_faturas} fat</span></span></label>`)
     .join("");
 }
+
+// Unificação automática de titulares com o mesmo nome.
+$("unificarDupBtn").addEventListener("click", async () => {
+  // detecta grupos de nome repetido para avisar o usuário
+  const cont = {};
+  titulares.forEach((t) => { const k = (t.nome || "").trim().toLowerCase(); cont[k] = (cont[k] || 0) + 1; });
+  const grupos = Object.values(cont).filter((n) => n > 1).length;
+  if (!grupos) return alert("Nenhum titular duplicado (mesmo nome) foi encontrado.");
+  if (!confirm(`Foram encontrados ${grupos} nome(s) de titular repetido(s).\nUnificar automaticamente cada grupo em um único titular?\nEm cada grupo, prevalece o que tem mais faturas. Esta ação não pode ser desfeita.`)) return;
+  try {
+    const r = await api("/api/titulares/merge-duplicados", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    let msg = `Unificação de duplicados concluída.\n${r.grupos} grupo(s) unificado(s), ${r.titulares_removidos} titular(es) removido(s).`;
+    msg += `\n${r.instalacoes_movidas} instalação(ões) movida(s), ${r.instalacoes_mescladas} mesclada(s).`;
+    if (r.faturas_descartadas) msg += `\n${r.faturas_descartadas} fatura(s) duplicada(s) descartada(s).`;
+    alert(msg);
+    await carregarTitulares();
+    await carregarInstalacoes();
+  } catch (e) { alert(e.message); }
+});
 
 $("confirmMergeBtn").addEventListener("click", async () => {
   const destino = Number($("mergeDestino").value);
