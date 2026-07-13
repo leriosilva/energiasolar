@@ -11,7 +11,7 @@ import os from "os";
 import { spawn } from "child_process";
 
 import { pool, migrate, query } from "./src/db.js";
-import { normalizarLinha, normalizarCodigo, parseMes } from "./src/parsing.js";
+import { normalizarLinha, normalizarCodigo, parseMes, removerAcentos } from "./src/parsing.js";
 import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -52,10 +52,11 @@ app.get("/api/titulares", wrap(async (req, res) => {
 app.post("/api/titulares", wrap(async (req, res) => {
   const { nome, documento, email, telefone, observacoes } = req.body;
   if (!nome || !nome.trim()) return res.status(400).json({ erro: "Nome e obrigatorio." });
+  const nomeLimpo = removerAcentos(nome.trim());
   const { rows } = await query(
     `INSERT INTO titulares (nome, documento, email, telefone, observacoes)
      VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [nome.trim(), documento || null, email || null, telefone || null, observacoes || null]
+    [nomeLimpo, documento || null, email || null, telefone || null, observacoes || null]
   );
   res.status(201).json(rows[0]);
 }));
@@ -65,7 +66,7 @@ app.put("/api/titulares/:id", wrap(async (req, res) => {
   const { rows } = await query(
     `UPDATE titulares SET nome=$1, documento=$2, email=$3, telefone=$4, observacoes=$5
      WHERE id=$6 RETURNING *`,
-    [nome, documento || null, email || null, telefone || null, observacoes || null, req.params.id]
+    [removerAcentos(nome), documento || null, email || null, telefone || null, observacoes || null, req.params.id]
   );
   if (!rows.length) return res.status(404).json({ erro: "Titular nao encontrado." });
   res.json(rows[0]);
@@ -411,7 +412,8 @@ function mapearRegistroPdf(r) {
 // linhas: array no formato normalizado; opts: { titularIdForm, substituir }
 async function processarFaturas(linhas, { titularIdForm = null, substituir = false } = {}) {
   const cacheTitular = new Map();
-  async function resolverTitularPorNome(nome) {
+  async function resolverTitularPorNome(nomeRaw) {
+    const nome = removerAcentos(String(nomeRaw || "").trim());
     const key = nome.toLowerCase();
     if (cacheTitular.has(key)) return cacheTitular.get(key);
     const sel = await query(`SELECT id FROM titulares WHERE LOWER(nome)=LOWER($1) LIMIT 1`, [nome]);
@@ -589,11 +591,26 @@ app.get("*", (req, res) => {
 });
 
 /* ============================ BOOT ============================ */
+// Normaliza (uma vez) os nomes de titulares ja existentes, removendo acentos.
+async function normalizarTitularesExistentes() {
+  const { rows } = await query(`SELECT id, nome FROM titulares`);
+  let n = 0;
+  for (const t of rows) {
+    const limpo = removerAcentos(t.nome || "");
+    if (limpo !== t.nome) {
+      await query(`UPDATE titulares SET nome=$1 WHERE id=$2`, [limpo, t.id]);
+      n++;
+    }
+  }
+  if (n) console.log(`[boot] ${n} titular(es) tiveram acentos removidos do nome.`);
+}
+
 async function start() {
   try {
     await migrate();
+    await normalizarTitularesExistentes();
   } catch (e) {
-    console.error("[boot] Falha ao migrar o banco:", e.message);
+    console.error("[boot] Falha ao migrar/normalizar o banco:", e.message);
   }
   app.listen(PORT, () => console.log(`[boot] Servidor ouvindo na porta ${PORT}`));
 }
