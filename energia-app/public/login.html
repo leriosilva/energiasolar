@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Entrar · Plataforma de Faturas · Lério &amp; Silva</title>
+<link rel="icon" type="image/svg+xml" href="/logo-simbolo.svg" />
 <style>
   :root { color-scheme: light; --azul:#1b2b44; --dourado:#b8924a; --borda:#d6dde7; --fundo:#f4f6f9; }
   * { box-sizing: border-box; }
@@ -11,7 +12,8 @@
          background:var(--fundo); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--azul); padding:16px; }
   .card { width:100%; max-width:380px; background:#fff; border:1px solid var(--borda); border-radius:14px;
           padding:32px 28px; box-shadow:0 8px 24px rgba(27,43,68,.08); }
-  .marca { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+  .marca { display:flex; flex-direction:column; align-items:flex-start; gap:8px; margin-bottom:22px; }
+  .marca img { display:block; width:100%; max-width:260px; height:auto; }
   .logo { width:44px; height:44px; border-radius:10px; background:var(--azul); color:#fff; display:flex;
           align-items:center; justify-content:center; font-weight:800; letter-spacing:1px; }
   .marca b { display:block; font-size:16px; letter-spacing:.5px; }
@@ -30,7 +32,7 @@
 </head>
 <body>
   <form class="card" id="f" autocomplete="on">
-    <div class="marca"><div class="logo">LS</div><div><b>LÉRIO &amp; SILVA</b><small>Plataforma de faturas de energia</small></div></div>
+    <div class="marca"><img src="/logo.svg" alt="Lério &amp; Silva — Contabilidade Estratégica" width="260" height="59"><small>Plataforma de faturas de energia</small></div>
     <h1>Entrar</h1>
     <label for="usuario">Usuário</label>
     <input id="usuario" name="username" autocomplete="username" required autofocus>
