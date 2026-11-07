@@ -350,12 +350,14 @@ export function montarRelatorio(usinas, { hoje = hojeBR(), agora = new Date() } 
     const ultima = u.real_em ? new Date(u.real_em) : null;
     const horasSem = ultima ? (agora - ultima) / 3600e3 : Infinity;
     const hBR = Number(horaBR(agora).slice(0, 2));
-    const semComunicacao = hBR >= 8 && hBR < 18 && horasSem > 3;
+    const diurno = hBR >= 8 && hBR < 18; // à noite os microinversores desligam (sem sol) e o S-Miles os mostra desconectados
+    const semComunicacao = diurno && horasSem > 3;
+    const micOffDia = diurno ? micOff : 0;
     const motivos = [];
     if (parados) motivos.push(`${parados} dia(s) sem geração enquanto a referência gerou normalmente`);
     if (baixos) motivos.push(`${baixos} dia(s) com geração muito abaixo do esperado`);
     if (semComunicacao) motivos.push(`sem comunicação com o S-Miles há ${Number.isFinite(horasSem) ? fmt(horasSem) + " h" : "tempo indeterminado"}`);
-    if (micOff) motivos.push(`${micOff} de ${micros.length} microinversor(es) desconectado(s)`);
+    if (micOffDia) motivos.push(`${micOff} de ${micros.length} microinversor(es) desconectado(s)`);
     if (micAlarme) motivos.push(`${micAlarme} microinversor(es) com alarme`);
     // sem vizinha monitorada a comparação sofre com o clima de outra região: margem maior
     const [limAt, limIrr] = u.vizinhas ? [0.9, 0.75] : [0.7, 0.5];
@@ -364,8 +366,10 @@ export function montarRelatorio(usinas, { hoje = hojeBR(), agora = new Date() } 
     if (semDado) motivos.push(`${semDado} dia(s) sem dado no S-Miles`);
     let nivel = "Regular";
     if (parados || semComunicacao || baixos >= 2 || indMuitoBaixo) nivel = "Irregular";
-    else if (baixos || micOff || micAlarme || semDado || indBaixo) nivel = "Atenção";
-    if (!motivos.length) motivos.push("geração dentro do esperado todos os dias, microinversores online e sem alarme");
+    else if (baixos || micOffDia || micAlarme || semDado || indBaixo) nivel = "Atenção";
+    if (!motivos.length) motivos.push(micOff && !diurno
+      ? "geração dentro do esperado todos os dias; microinversores desligados agora porque é noite"
+      : "geração dentro do esperado todos os dias, microinversores online e sem alarme");
     const tr = u.tempo_real || {};
     return {
       sid: u.sid, apelido: u.apelido, kwp: u.kwp, regiao: u.regiao, vizinhas: u.vizinhas,
