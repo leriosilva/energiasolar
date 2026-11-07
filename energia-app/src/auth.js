@@ -17,7 +17,8 @@ import { query } from "./db.js";
 
 const COOKIE = "ls_sessao";
 const ABERTAS = new Set(["/login", "/login.html", "/api/login", "/api/logout", "/api/health",
-  "/auth-guard.js", "/favicon.ico", "/styles.css"]);
+  "/auth-guard.js", "/favicon.ico", "/styles.css",
+  "/logo.svg", "/logo-simbolo.svg"]);
 // GETs que trazem dados: para usuários comuns a resposta é filtrada pelos titulares liberados
 const FILTRADAS = {
   "/api/titulares": (row, ok) => ok.has(Number(row.id)),
