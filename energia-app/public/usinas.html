@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usinas · Plataforma de Faturas · Lério &amp; Silva</title>
+<link rel="icon" type="image/svg+xml" href="/logo-simbolo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: o módulo como uma nova aba da plataforma — faixa navy com a marca, resumo em blocos, depois detalhe por usina, gráficos e método. Tema claro fixo. */
+:root{
+  --navy:#1a2456; --navy-2:#202d6f; --blue:#3146a3; --gold:#c79a3a;
+  --ink:#172033; --muted:#5d6a84; --line:#dde4f5; --bg:#eef1f9; --card:#ffffff; --soft:#f6f8fd;
+  --ok:#12805c; --ok-bg:#e3f4ec; --warn:#b76a00; --warn-bg:#fdf1de; --bad:#b42318; --bad-bg:#fde8e6;
+  --s1:#3146a3; --s2:#c79a3a; --s3:#1f8a7a;
+  --f-display:'Fraunces',Georgia,serif; --f-body:'Public Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme: light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+img{max-width:100%}
+body{background:var(--bg); color:var(--ink); font-family:var(--f-body); font-size:15px; line-height:1.5}
+.wrap{max-width:1180px; margin:0 auto; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
+.num{font-variant-numeric:tabular-nums}
+
+/* faixa superior (igual à plataforma) */
+.hero{background:linear-gradient(100deg, rgba(14,22,55,.97) 0%, rgba(20,30,77,.86) 55%, rgba(28,40,99,.7) 100%), linear-gradient(135deg,#202d6f,#13204a); border-bottom-left-radius:30px; border-bottom-right-radius:30px; color:#fff}
+.hero .wrap{padding-block:26px 30px; display:grid; gap:18px}
+.hero-top{display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap}
+.brand-logo{display:block; height:56px; width:auto; background:#fff; padding:9px 16px; border-radius:14px; box-shadow:0 10px 26px rgba(9,18,56,.28)}
+.mvp-tag{font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#f3dcae; border:1px solid rgba(243,220,174,.5); border-radius:999px; padding:5px 12px}
+.hero h1{font-family:var(--f-display); font-weight:600; font-size:clamp(28px,4vw,42px); line-height:1.08; margin:0; text-wrap:balance}
+.hero p{margin:0; color:rgba(234,240,255,.85); max-width:720px}
+
+.tabs{display:flex; gap:6px; flex-wrap:wrap; margin-top:-20px; position:relative}
+.tab{background:var(--card); border:1px solid var(--line); color:var(--muted); border-radius:12px; padding:9px 16px; font:600 14px var(--f-body); box-shadow:0 6px 16px rgba(15,23,42,.06)}
+.tab.active{background:var(--navy); color:#fff; border-color:var(--navy)}
+a.tab{text-decoration:none; cursor:pointer; transition:background .15s, color .15s, border-color .15s}
+a.tab:not(.active):hover{color:var(--navy); border-color:var(--blue); background:var(--soft)}
+a.tab:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+.tabs-nota{margin:8px 0 0; font-size:12px; color:var(--muted)}
+.tab .novo{font-size:10px; background:var(--gold); color:#fff; border-radius:6px; padding:1px 6px; margin-left:6px; vertical-align:2px}
+
+main{display:grid; gap:22px; padding-block:22px 48px}
+section{display:grid; gap:12px}
+h2{font-family:var(--f-display); font-weight:600; font-size:22px; margin:0; text-wrap:balance}
+.sub{color:var(--muted); margin:0; font-size:14px}
+.head{display:flex; justify-content:space-between; align-items:end; gap:12px; flex-wrap:wrap}
+
+.panel{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 18px 44px rgba(15,23,42,.06); min-width:0}
+
+/* KPIs */
+.kpis{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px}
+.kpi{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px 16px; display:grid; gap:2px; min-width:0}
+.kpi .lbl{font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:600}
+.kpi .val{font-size:26px; font-weight:800; color:var(--navy)}
+.kpi .val small{font-size:14px; font-weight:600; color:var(--muted); margin-left:3px}
+.kpi .det{font-size:13px; color:var(--muted)}
+.kpi.alerta{border-color:#f1c4c0; background:linear-gradient(0deg,var(--card),var(--card)) padding-box}
+.kpi.alerta .val{color:var(--bad)}
+
+/* alertas */
+.alertas{display:grid; gap:8px}
+.al{display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center; border:1px solid var(--line); border-left-width:5px; border-radius:12px; padding:10px 14px; background:var(--card)}
+.al.bad{border-left-color:var(--bad)} .al.warn{border-left-color:var(--warn)} .al.ok{border-left-color:var(--ok)}
+.al .q{font-weight:700} .al .d{color:var(--muted); font-size:13px}
+.al .perda{text-align:right; font-weight:700; white-space:nowrap; min-width:90px}
+.al .perda span{display:block; font-weight:500; font-size:12px; color:var(--muted)}
+.pill{display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; border-radius:999px; padding:3px 10px; white-space:nowrap}
+.pill::before{content:""; width:7px; height:7px; border-radius:50%; background:currentColor}
+.pill.ok{color:var(--ok); background:var(--ok-bg)} .pill.warn{color:var(--warn); background:var(--warn-bg)} .pill.bad{color:var(--bad); background:var(--bad-bg)}
+
+/* cards de usina */
+.usinas{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px}
+.us{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:16px; display:grid; gap:12px; min-width:0}
+.us-top{display:flex; justify-content:space-between; gap:8px; align-items:start}
+.us h3{margin:0; font-size:17px; display:flex; align-items:center; gap:8px}
+.us h3 i{width:10px; height:10px; border-radius:3px; display:inline-block}
+.us .loc{color:var(--muted); font-size:13px}
+.us dl{display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; margin:0}
+.us dt{font-size:12px; color:var(--muted)} .us dd{margin:0; font-weight:700; font-size:16px}
+.indice{display:grid; gap:6px}
+.indice .bar{height:8px; border-radius:6px; background:var(--soft); overflow:hidden; border:1px solid var(--line)}
+.indice .bar b{display:block; height:100%; border-radius:6px}
+.indice .row{display:flex; justify-content:space-between; font-size:13px}
+.spark{width:100%; height:46px; display:block}
+.us .meta{font-size:12px; color:var(--muted); border-top:1px dashed var(--line); padding-top:10px}
+
+
+
+/* robô / vazio */
+.robo{display:grid; gap:10px}
+.robo-status{margin:0; font-size:14px}
+.robo details summary{cursor:pointer; color:var(--blue); font-weight:600; font-size:14px}
+.robo td{white-space:normal; font-size:13px; vertical-align:top}
+.ctrls .lnk{font:600 13px var(--f-body); color:var(--blue); align-self:center; padding:6px 4px}
+.ctrls button:disabled{opacity:.55; cursor:progress}
+.reg-motivos{font-size:13px; color:var(--ink); margin:0}
+.vazio{text-align:left}
+/* sub-abas do módulo */
+.subtabs{display:flex; gap:8px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:10px}
+.subtab{display:flex; flex-direction:column; gap:2px; text-decoration:none; color:var(--muted); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:9px 16px; font-weight:700; font-size:15px}
+.subtab:hover{border-color:var(--blue); color:var(--navy)}
+.subtab[aria-selected="true"]{background:var(--navy); border-color:var(--navy); color:#fff}
+.subtab:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+.fonte-tag{font-size:11px; font-weight:600; letter-spacing:.03em; opacity:.8}
+.view{display:grid; gap:22px}
+.fonte-box{font-size:13px; color:var(--ink); background:var(--ok-bg); border:1px solid #bfe3d1; border-radius:12px; padding:10px 14px}
+.fonte-box.alt{background:var(--warn-bg); border-color:#f0d6a8}
+
+/* usina × fatura */
+.kpis6{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:12px}
+.vinc td, .vinc th{white-space:normal; min-width:110px; text-align:left}
+td small{display:block; color:var(--muted); font-size:12px; font-weight:500}
+.vinc td:first-child{min-width:150px}
+.vinc .uc{font-weight:700} .vinc small{display:block; color:var(--muted); font-size:12px}
+.tag{display:inline-block; font-size:11px; font-weight:700; border-radius:6px; padding:1px 7px; background:var(--soft); border:1px solid var(--line); color:var(--muted)}
+.nota{font-size:13px; color:var(--muted); margin:0}
+h3{font-size:16px; margin:6px 0 0}
+@media (max-width:980px){ .kpis6{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:520px){ .kpis6{grid-template-columns:1fr 1fr} }
+
+/* gráficos */
+.grid2{display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:14px}
+.chart-box{position:relative; height:300px}
+.ctrls{display:flex; gap:6px; flex-wrap:wrap}
+.ctrls button{font:600 13px var(--f-body); border:1px solid var(--line); background:var(--card); color:var(--muted); border-radius:10px; padding:6px 12px; cursor:pointer}
+.ctrls button[aria-pressed="true"]{background:var(--navy); color:#fff; border-color:var(--navy)}
+.ctrls button:focus-visible, input:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+
+/* tabela */
+.tbl{overflow-x:auto}
+table{border-collapse:collapse; width:100%; font-size:14px}
+th,td{padding:9px 10px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:700}
+td .v{font-size:12px; font-weight:700; margin-left:6px}
+.up{color:var(--ok)} .down{color:var(--bad)} .neutro{color:var(--muted)}
+
+.metodo{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px}
+.metodo h4{margin:0 0 6px; font-size:15px}
+.metodo p, .metodo li{font-size:14px; color:var(--muted); margin:0}
+.metodo ul{margin:0; padding-left:18px; display:grid; gap:4px}
+.tarifa{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)}
+.tarifa input{width:84px; font:600 14px var(--f-body); padding:5px 8px; border:1px solid var(--line); border-radius:8px; color:var(--ink); background:var(--card)}
+.fonte{font-size:12px; color:var(--muted)}
+
+@media (max-width:980px){ .kpis{grid-template-columns:repeat(2,minmax(0,1fr))} .usinas,.metodo{grid-template-columns:1fr} .grid2{grid-template-columns:1fr} }
+@media (max-width:520px){ .kpis{grid-template-columns:1fr 1fr} .kpi .val{font-size:22px} .al{grid-template-columns:1fr} .al .perda{text-align:left} .brand-logo{height:44px} }
+@media (prefers-reduced-motion:reduce){ *{animation:none!important; transition:none!important} }
+</style>
+
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-top">
+      <img class="brand-logo" src="/logo.svg" alt="Lério &amp; Silva — Contabilidade Estratégica" width="246" height="56">
+    </div>
+    <h1>Performance das usinas solares</h1>
+    <p>Geração, produtividade e alertas das usinas monitoradas na Hoymiles, comparadas entre si e com o próprio histórico.</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="tabs" aria-label="Abas da plataforma">
+    <a class="tab" href="/">Titulares</a><a class="tab" href="/">Instalações</a><a class="tab" href="/">Upload de Faturas</a><a class="tab" href="/">Análise</a>
+    <a class="tab active" href="/usinas" aria-current="page">Usinas</a>
+  </nav>
+
+  <main>
+    <section id="robo" hidden>
+      <div class="panel robo">
+        <div class="head"><div><h2>Robô diário</h2><p class="sub" id="roboInfo"></p></div>
+          <div class="ctrls"><button type="button" id="btnAtualizar">Atualizar agora</button><button type="button" id="btnEnviar">Atualizar e enviar e-mail</button><a class="lnk" href="/api/usinas/relatorio.html" target="_blank" rel="noopener">Ver o e-mail de hoje</a></div></div>
+        <p class="robo-status" id="roboStatus"></p>
+        <details><summary>Histórico de execuções</summary><div class="tbl"><table id="roboHist"></table></div></details>
+      </div>
+    </section>
+    <div class="panel vazio" id="vazio" hidden><h2>Ainda não há dados das usinas</h2><p class="sub">O robô lê o S-Miles todos os dias às 17:00. Depois de cadastrar as contas no Railway, o administrador pode clicar em "Atualizar agora".</p></div>
+    <div class="subtabs" role="tablist" aria-label="Visões do módulo Usinas">
+      <a class="subtab" role="tab" href="#performance" id="st-performance" aria-controls="v-performance">Performance das usinas<span class="fonte-tag">Fonte: S-Miles Cloud</span></a>
+      <a class="subtab" role="tab" href="#faturas" id="st-faturas" aria-controls="v-faturas">Usina × fatura<span class="fonte-tag">Fonte: faturas Enel/Energisa + S-Miles</span></a>
+    </div>
+    <div class="view" id="v-performance" role="tabpanel" aria-labelledby="st-performance">
+      <div class="fonte-box"><b>Fonte única desta aba: S-Miles Cloud (Hoymiles).</b> Geração, potência, índice de desempenho, alertas e produtividade vêm exclusivamente dos dados de monitoramento das usinas. As faturas da Enel e da Energisa não entram em nenhum cálculo desta aba.</div>
+    <section aria-labelledby="t-resumo">
+      <div class="head">
+        <div><h2 id="t-resumo">Resumo</h2><p class="sub" id="coleta"></p></div>
+        <label class="tarifa" for="tarifa">Tarifa para valorar a energia (R$/kWh) <input id="tarifa" type="number" step="0.01" min="0" value="0.90"></label>
+      </div>
+      <div class="kpis" id="kpis"></div>
+    </section>
+    <section aria-labelledby="t-rel7">
+      <div class="head"><div><h2 id="t-rel7">Últimos 7 dias e regularidade</h2><p class="sub" id="rel7sub"></p></div></div>
+      <div class="usinas" id="rel7"></div>
+      <div class="panel tbl"><table id="tbRel7"></table></div>
+    </section>
+    <section aria-labelledby="t-alertas">
+      <div class="head"><div><h2 id="t-alertas">Alertas</h2><p class="sub">Dias em que a usina gerou bem menos do que a vizinha no mesmo dia, considerando o desempenho normal das duas. Últimos 90 dias.</p></div></div>
+      <div class="alertas" id="alertas"></div>
+    </section>
+    <section aria-labelledby="t-usinas">
+      <div class="head"><div><h2 id="t-usinas">Usinas</h2><p class="sub">Índice de desempenho: geração dos últimos 30 dias em relação ao esperado pela comparação com a vizinha (100% = normal).</p></div></div>
+      <div class="usinas" id="usinas"></div>
+    </section>
+    <section class="grid2" aria-label="Gráficos">
+      <div class="panel" style="display:grid;gap:10px">
+        <div class="head"><div><h2>Geração diária por kWp</h2><p class="sub">kWh gerados por kWp instalado. Permite comparar usinas de tamanhos diferentes.</p></div>
+          <div class="ctrls" id="ctrlDias"><button type="button" data-d="30" aria-pressed="false">30 dias</button><button type="button" data-d="90" aria-pressed="true">90 dias</button></div></div>
+        <div class="chart-box"><canvas id="chDiario" aria-label="Gráfico de geração diária por kWp"></canvas></div>
+      </div>
+      <div class="panel" style="display:grid;gap:10px">
+        <div class="head"><div><h2>Mês a mês</h2><p class="sub">Geração mensal (kWh) e média do mesmo mês nos anos anteriores.</p></div>
+          <div class="ctrls" id="ctrlUsina"></div></div>
+        <div class="chart-box"><canvas id="chMensal" aria-label="Gráfico de geração mensal"></canvas></div>
+      </div>
+    </section>
+    <section aria-labelledby="t-anual">
+      <div class="head"><div><h2 id="t-anual">Produtividade anual</h2><p class="sub">kWh/kWp por ano civil. Anos incompletos marcados com o número de meses. A variação compara anos completos.</p></div></div>
+      <div class="panel tbl"><table id="tbAnual"></table></div>
+    </section>
+    </div>
+    <div class="view" id="v-faturas" role="tabpanel" aria-labelledby="st-faturas" hidden>
+      <div class="fonte-box alt"><b>Esta aba é complementar e não mede performance.</b> Usa as faturas da Enel e da Energisa (injeção, consumo da rede, créditos e valor pago), comparadas com a geração do S-Miles, para conferir as faturas e calcular a economia. O desempenho das usinas é medido só na aba Performance.</div>
+    <section aria-labelledby="t-faturas">
+      <div class="head"><div><h2 id="t-faturas">Usina × fatura de energia</h2>
+        <p class="sub">Cruza a geração da Hoymiles com as faturas já importadas na plataforma, ciclo de leitura a ciclo de leitura: quanto foi usado na hora, quanto foi para a rede, os créditos acumulados e a economia.</p></div></div>
+      <div class="panel tbl"><table class="vinc" id="tbVinc"></table></div>
+      <div class="head"><h3>Balanço por usina</h3><div class="ctrls" id="ctrlFat"></div></div>
+      <div class="kpis6" id="kpiFat"></div>
+      <div class="panel" style="display:grid;gap:10px">
+        <div><h2>Geração, injeção e consumo por ciclo de leitura</h2><p class="sub">Barras: geração da usina dividida entre o que foi usado na hora e o que foi injetado na rede (dado da fatura). Linhas: consumo puxado da rede e saldo de créditos.</p></div>
+        <div class="chart-box" style="height:330px"><canvas id="chBalanco" aria-label="Gráfico de balanço energético por ciclo"></canvas></div>
+        <p class="nota" id="notaBalanco"></p>
+      </div>
+      <h3>Divergências e pontos de atenção</h3>
+      <div class="alertas" id="divs"></div>
+      <h3>Fatura antes e depois da usina</h3>
+      <div class="panel tbl"><table id="tbAntes"></table></div>
+    </section>
+    </div>
+    <section aria-labelledby="t-metodo">
+      <h2 id="t-metodo">Como o módulo funciona</h2>
+      <div class="metodo">
+        <div class="panel"><h4>Coleta</h4><ul>
+          <li>Performance: leitura diária e automática do S-Miles Cloud (Hoymiles), só de consulta. É a única fonte usada para medir as usinas.</li>
+          <li>Guarda geração diária e mensal, potência, status dos microinversores e alarmes.</li>
+          <li>O robô roda todos os dias às 17:00 (Brasília), atualiza este painel e envia o relatório dos últimos 7 dias por e-mail.</li></ul></div>
+        <div class="panel"><h4>Análise</h4><ul>
+          <li>Produtividade em kWh/kWp, para comparar usinas de tamanhos diferentes.</li>
+          <li>Cada usina é comparada com a vizinha da mesma região no mesmo dia. Dia nublado derruba as duas; queda isolada indica defeito.</li><li>Usina sem vizinha monitorada só gera alerta em paradas fortes (abaixo de 25% do esperado).</li>
+          <li>Perda estimada = o que a usina deveria ter gerado menos o que gerou, valorado pela tarifa.</li></ul></div>
+        <div class="panel"><h4>Na plataforma</h4><ul>
+          <li>Cada usina é ligada ao titular pela UC que recebe a geração.</li>
+          <li>Cada usuário vê só as usinas dos titulares liberados para ele.</li>
+          <li>Faturas Enel/Energisa: usadas apenas na aba Usina × fatura, para conferência e economia. A geração é casada com cada fatura pelo período de leitura (data de leitura menos os dias faturados). Fora dos últimos 90 dias, o período é estimado rateando a geração mensal por dia.</li></ul></div>
+      </div>
+      <p class="fonte" id="fonte"></p>
+    </section>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script src="/auth-guard.js"></script>
+<script>
+let DADOS=[], REFS=[], FAT={ucs:{},fat:{}}, PAINEL=null, REL=null;
+const CORES = ['#3146a3','#c79a3a','#1f8a7a','#7a4fb5','#c2410c','#0f766e'];
+const fmt = (v,d=0)=>!Number.isFinite(v)?'—':v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const brl = v=>!Number.isFinite(v)?'—':v.toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0});
+const dataBR = s=>s.slice(8,10)+'/'+s.slice(5,7);
+const mesNome = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const mesBR = ym=>mesNome[+ym.slice(5,7)-1]+'/'+ym.slice(2,4);
+const mediana = a=>{const s=a.filter(Number.isFinite).sort((x,y)=>x-y); const m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+let tarifa = 0.90;
+try{ const t=parseFloat(localStorage.getItem('ls_tarifa')); if(t>0) tarifa=t; }catch(e){}
+document.getElementById('tarifa').value = tarifa.toFixed(2);
+
+function montar(){
+DADOS.forEach((u,i)=>{ u.cor=CORES[i%CORES.length]; u.diaKwhKwp = u.diario.map(([d,wh])=>wh==null?NaN:wh/1000/u.kwp); });
+const MES_ATUAL = PAINEL.hoje.slice(0,7);
+const NOME_MES = new Date(PAINEL.hoje+'T12:00:00').toLocaleDateString('pt-BR',{month:'long'});
+const dias = DADOS[0].diario.map(x=>x[0]);
+const hojeISO = dias[dias.length-1];
+const diasFechados = dias.length-1; // o último dia ainda está em curso
+
+/* ---------- análise ---------- */
+function analisar(){
+  // referência de cada usina = média da produtividade das OUTRAS usinas no mesmo dia (vizinhas da mesma região têm prioridade)
+  DADOS.forEach(u=>{
+    // REFS = séries anônimas (kWh/kWp por dia) das usinas que este usuário não vê, só para a comparação
+    const todas = DADOS.concat(REFS);
+    const viz = todas.filter(o=>o!==u && o.regiao===u.regiao);
+    u.vizinhas = viz.length>0; const base = viz.length? viz : todas.filter(o=>o!==u);
+    u.ref = dias.map((_,k)=>{const v=base.map(o=>o.diaKwhKwp[k]).filter(x=>Number.isFinite(x)&&x>0); return v.length? v.reduce((a,b)=>a+b,0)/v.length : NaN;});
+    u.limiar = u.vizinhas ? 0.6 : 0.25;
+  });
+  DADOS.forEach(u=>{
+    const razoes = []; for(let k=0;k<diasFechados;k++) if(u.ref[k]>=2 && u.diaKwhKwp[k]>0) razoes.push(u.diaKwhKwp[k]/u.ref[k]);
+    u.razaoNormal = mediana(razoes);
+    u.eventos = []; let atual=null;
+    for(let k=0;k<diasFechados;k++){
+      if(!(u.ref[k]>=1) || !Number.isFinite(u.diaKwhKwp[k])){ atual=null; continue; }
+      const esperado = u.ref[k]*u.razaoNormal, real = u.diaKwhKwp[k], r = real/esperado;
+      if(r<u.limiar){
+        const perda=(esperado-real)*u.kwp;
+        if(atual && atual.fimIdx===k-1){ atual.fimIdx=k; atual.fim=dias[k]; atual.perda+=perda; atual.min=Math.min(atual.min,r); atual.n++; atual.zeros+= real===0?1:0; }
+        else { atual={ini:dias[k],fim:dias[k],fimIdx:k,perda,min:r,n:1,zeros:real===0?1:0}; u.eventos.push(atual); }
+      } else atual=null;
+    }
+    let soma=0, somaEsp=0, nd=0, somaTudo=0, ndTudo=0; for(let k=diasFechados-30;k<diasFechados;k++){ const p=u.diaKwhKwp[k]; if(!Number.isFinite(p)) continue; somaTudo+=p; ndTudo++; if(!Number.isFinite(u.ref[k])||!Number.isFinite(u.razaoNormal)) continue; soma+=p; somaEsp+=u.ref[k]*u.razaoNormal; nd++; }
+    u.indice30 = somaEsp>0? soma/somaEsp : NaN;
+    u.prod30 = ndTudo? somaTudo/ndTudo : NaN;
+    u.perda90 = u.eventos.reduce((s,e)=>s+e.perda,0);
+    const ult12=u.mensal.filter(([ym])=>ym<MES_ATUAL).slice(-12); u.per12=[ult12[0]?.[0], ult12[ult12.length-1]?.[0]];
+    u.kwh12 = ult12.reduce((s,[,v])=>s+v,0)/1000;
+    u.micOn = u.micros.filter(x=>x.conectado).length;
+    u.micAlarme = u.micros.filter(x=>x.warn).length;
+  });
+}
+const REF = analisar();
+
+/* ---------- render ---------- */
+function render(){
+  const kwpTot = DADOS.reduce((s,u)=>s+u.kwp,0);
+  const hoje = DADOS.reduce((s,u)=>s+u.real.today_eq,0)/1000;
+  const mes = DADOS.reduce((s,u)=>s+u.real.month_eq,0)/1000;
+  const doze = DADOS.reduce((s,u)=>s+u.kwh12,0);
+  const perda = DADOS.reduce((s,u)=>s+u.perda90,0);
+  const nEv = DADOS.reduce((s,u)=>s+u.eventos.length,0);
+  const online = DADOS.filter(u=>u.micOn===u.micros.length).length;
+  const tempos=DADOS.map(u=>u.real.data_time).filter(Boolean).sort(); const ultLeit=tempos[tempos.length-1]||'';
+  document.getElementById('coleta').textContent = ultLeit? `Última leitura do S-Miles: ${ultLeit.slice(8,10)}/${ultLeit.slice(5,7)} às ${ultLeit.slice(11,16)}. ${DADOS.length} usina${DADOS.length>1?'s':''} em ${new Set(DADOS.map(u=>u.conta)).size} conta(s).` : 'Sem leitura do S-Miles ainda.';
+  const per=DADOS[0]?.per12||[];
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><span class="lbl">Potência instalada</span><span class="val num">${fmt(kwpTot)}<small>kWp</small></span><span class="det">${online} de ${DADOS.length} usinas 100% online</span></div>
+    <div class="kpi"><span class="lbl">Gerado hoje</span><span class="val num">${fmt(hoje,1)}<small>kWh</small></span><span class="det">até ${ultLeit.slice(11,16)||'agora'} · ${brl(hoje*tarifa)}</span></div>
+    <div class="kpi"><span class="lbl">Gerado em ${NOME_MES}</span><span class="val num">${fmt(mes)}<small>kWh</small></span><span class="det">${+PAINEL.hoje.slice(8,10)} dia(s) · ${brl(mes*tarifa)}</span></div>
+    <div class="kpi"><span class="lbl">Últimos 12 meses</span><span class="val num">${fmt(doze/1000,1)}<small>MWh</small></span><span class="det">${per[0]?mesBR(per[0])+' a '+mesBR(per[1]):'—'} · ${brl(doze*tarifa)}</span></div>
+    <div class="kpi ${perda>0?'alerta':''}"><span class="lbl">Perda estimada 90 dias</span><span class="val num">${fmt(perda)}<small>kWh</small></span><span class="det">${nEv} ocorrência${nEv===1?'':'s'} · ${brl(perda*tarifa)}</span></div>`;
+
+  // alertas
+  const lista=[];
+  DADOS.forEach(u=>u.eventos.forEach(e=>lista.push({u,e})));
+  lista.sort((a,b)=>b.e.ini.localeCompare(a.e.ini));
+  const al = lista.map(({u,e})=>{
+    const grave = e.zeros>0 || e.min<0.3;
+    const periodo = e.ini===e.fim? dataBR(e.ini) : `${dataBR(e.ini)} a ${dataBR(e.fim)}`;
+    const tipo = e.zeros>0? (e.zeros===e.n?'Parada total':'Parada e baixa geração') : 'Geração muito abaixo do normal';
+    return `<div class="al ${grave?'bad':'warn'}"><span class="pill ${grave?'bad':'warn'}">${grave?'Crítico':'Atenção'}</span>
+      <div><div class="q">${u.nome}: ${tipo}</div><div class="d">${periodo} · ${e.n} dia${e.n>1?'s':''} · gerou ${fmt(e.min*100)}% do esperado no pior dia, ${u.vizinhas?'enquanto a usina vizinha gerou normalmente':'enquanto as demais usinas geraram normalmente'}</div></div>
+      <div class="perda num">−${fmt(e.perda,1)} kWh<span>${brl(e.perda*tarifa)}</span></div></div>`;
+  });
+  DADOS.filter(u=>!u.eventos.length).forEach(u=>al.push(`<div class="al ok"><span class="pill ok">Normal</span><div><div class="q">${u.nome}: sem ocorrências</div><div class="d">Geração dentro do padrão em todos os dias dos últimos 90 dias</div></div><div class="perda num">—</div></div>`));
+  const mic = DADOS.filter(u=>u.micAlarme||u.micOn<u.micros.length);
+  if(!mic.length) al.push(`<div class="al ok"><span class="pill ok">Normal</span><div><div class="q">Microinversores</div><div class="d">Todos os ${DADOS.reduce((s,u)=>s+u.micros.length,0)} microinversores conectados e sem alarme na Hoymiles</div></div><div class="perda num">—</div></div>`);
+  document.getElementById('alertas').innerHTML = al.join('');
+
+  // cards
+  document.getElementById('usinas').innerHTML = DADOS.map((u,i)=>{
+    const ind=u.indice30, [l1,l2]=u.vizinhas?[0.95,0.85]:[0.8,0.6], st = !Number.isFinite(ind)?'warn':ind>=l1?'ok':ind>=l2?'warn':'bad', stTxt = st==='ok'?'Normal':st==='warn'?'Atenção':'Abaixo';
+    return `<article class="us">
+      <div class="us-top"><div><h3><i style="background:${u.cor}"></i>${u.nome}</h3><div class="loc">${u.local} · ${fmt(u.kwp)} kWp</div></div><span class="pill ${st}">${stTxt}</span></div>
+      <dl class="num">
+        <div><dt>Agora</dt><dd>${fmt(u.real.real_power/1000,2)} kW</dd></div>
+        <div><dt>Hoje</dt><dd>${fmt(u.real.today_eq/1000,1)} kWh</dd></div>
+        <div><dt style="text-transform:capitalize">${NOME_MES}</dt><dd>${fmt(u.real.month_eq/1000)} kWh</dd></div>
+        <div><dt>12 meses</dt><dd>${fmt(u.kwh12/u.kwp)} kWh/kWp</dd></div>
+        <div><dt>Média 30 dias</dt><dd>${fmt(u.prod30,2)} kWh/kWp/dia</dd></div>
+        <div><dt>Desde a instalação</dt><dd>${fmt(u.real.total_eq/1e6,1)} MWh</dd></div>
+      </dl>
+      <div class="indice"><div class="row"><span>Índice de desempenho (30 dias)</span><b class="num">${fmt(ind*100)}%</b></div>
+        <div class="bar" role="img" aria-label="Índice ${fmt(ind*100)}%"><b style="width:${Math.min(100,ind*100)}%;background:var(--${st==='ok'?'ok':st==='warn'?'warn':'bad'})"></b></div></div>
+      <canvas class="spark" id="sp${i}" aria-label="Geração dos últimos 30 dias"></canvas>
+      <div class="meta">${u.micOn}/${u.micros.length} microinversores online (${[...new Set(u.micros.map(m=>m.modelo))].join(', ')}) · instalada em ${u.instalacao.split('-').reverse().join('/')} · conta Hoymiles “${u.conta}”</div>
+    </article>`;}).join('');
+  DADOS.forEach((u,i)=>spark(document.getElementById('sp'+i), u.diaKwhKwp.slice(diasFechados-30,diasFechados), u.cor, u.eventos));
+  renderRel();
+
+  // tabela anual
+  const anos=[...new Set(DADOS.flatMap(u=>u.mensal.map(([ym])=>ym.slice(0,4))))].sort();
+  let h='<thead><tr><th>Usina</th>'+anos.map(a=>`<th>${a}</th>`).join('')+'</tr></thead><tbody>';
+  DADOS.forEach(u=>{
+    const por={}; u.mensal.forEach(([ym,v])=>{const a=ym.slice(0,4); (por[a]=por[a]||{s:0,n:0}); if(v>0||ym>u.instalacao.slice(0,7)){por[a].s+=v; por[a].n++;}});
+    h+=`<tr><td><b>${u.nome}</b></td>`+anos.map(a=>{
+      const p=por[a]; if(!p) return '<td class="neutro">—</td>';
+      const val=p.s/1000/u.kwp; const ant=por[a-1];
+      let v=''; if(p.n===12 && ant && ant.n===12){const x=val/(ant.s/1000/u.kwp)-1; v=`<span class="v ${x>=0?'up':'down'}">${x>=0?'+':''}${fmt(x*100,1)}%</span>`;}
+      return `<td class="num">${fmt(val)}${p.n<12?` <span class="v neutro">${p.n}m</span>`:''}${v}</td>`;}).join('')+'</tr>';
+  });
+  document.getElementById('tbAnual').innerHTML=h+'</tbody>';
+  document.getElementById('fonte').textContent=`Fonte: S-Miles Cloud (Hoymiles), conta(s) ${[...new Set(DADOS.map(u=>u.conta))].join(', ')}. Energia valorada pela tarifa informada acima; R$ 0,90/kWh é o valor configurado no portal da Hoymiles.`;
+}
+
+function spark(cv, vals, cor, eventos){
+  const r=window.devicePixelRatio||1, W=cv.clientWidth||300, H=46; cv.width=W*r; cv.height=H*r;
+  const c=cv.getContext('2d'); c.scale(r,r);
+  vals=vals.map(v=>Number.isFinite(v)?v:0);
+  const max=Math.max(...vals,0.1), n=vals.length, x=i=>4+i*(W-8)/(n-1), y=v=>H-4-(v/max)*(H-10);
+  c.beginPath(); vals.forEach((v,i)=>i?c.lineTo(x(i),y(v)):c.moveTo(x(i),y(v)));
+  c.strokeStyle=cor; c.lineWidth=1.6; c.stroke();
+  c.lineTo(x(n-1),H); c.lineTo(x(0),H); c.closePath(); c.globalAlpha=.12; c.fillStyle=cor; c.fill(); c.globalAlpha=1;
+  eventos.forEach(e=>{ for(let k=0;k<n;k++){ const d=dias[diasFechados-30+k]; if(d>=e.ini&&d<=e.fim){ c.beginPath(); c.arc(x(k),y(vals[k]),3,0,7); c.fillStyle='#b42318'; c.fill(); } } });
+  c.beginPath(); c.arc(x(n-1),y(vals[n-1]),2.6,0,7); c.fillStyle=cor; c.fill();
+}
+
+/* ---------- gráficos ---------- */
+Chart.defaults.font.family="'Public Sans', system-ui, sans-serif"; Chart.defaults.color='#5d6a84'; Chart.defaults.borderColor='#e6ebf7';
+let chD, chM, nDias=90, usinaSel=0;
+function grDiario(){
+  const ini=diasFechados-nDias, lab=dias.slice(ini,diasFechados).map(dataBR);
+  const ds=DADOS.map(u=>({label:u.nome, data:u.diaKwhKwp.slice(ini,diasFechados).map(v=>Number.isFinite(v)?+v.toFixed(2):null), borderColor:u.cor, backgroundColor:u.cor, borderWidth:1.8, pointRadius:dias.slice(ini,diasFechados).map(d=>u.eventos.some(e=>d>=e.ini&&d<=e.fim)?4:0), pointBackgroundColor:'#b42318', pointBorderColor:'#b42318', tension:.25}));
+  if(chD) chD.destroy();
+  chD=new Chart(document.getElementById('chDiario'),{type:'line',data:{labels:lab,datasets:ds},options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{position:'bottom',labels:{boxWidth:12,boxHeight:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.parsed.y,2)} kWh/kWp`}}},
+    scales:{y:{beginAtZero:true,title:{display:true,text:'kWh/kWp'}},x:{ticks:{maxTicksLimit:10,maxRotation:0}}}}});
+}
+function grMensal(){
+  const u=DADOS[usinaSel]; const m=u.mensal.slice(-13);
+  const media=m.map(([ym])=>{const ant=u.mensal.filter(([y2,v])=>y2.slice(5)===ym.slice(5)&&y2<ym.slice(0,4)+'-00'&&v>0&&y2>u.instalacao.slice(0,7)).map(([,v])=>v/1000); return ant.length?+(ant.reduce((a,b)=>a+b,0)/ant.length).toFixed(0):null;});
+  if(chM) chM.destroy();
+  chM=new Chart(document.getElementById('chMensal'),{data:{labels:m.map(([ym])=>mesBR(ym)),datasets:[
+     {type:'bar',label:'Gerado (kWh)',data:m.map(([,v])=>+(v/1000).toFixed(0)),backgroundColor:u.cor,borderRadius:5,order:2},
+     {type:'line',label:'Média do mesmo mês em anos anteriores',data:media,borderColor:'#172033',backgroundColor:'#172033',borderDash:[5,4],pointRadius:3,spanGaps:false,order:1}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,boxHeight:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.parsed.y)} kWh`}}},scales:{y:{beginAtZero:true,title:{display:true,text:'kWh'}},x:{ticks:{maxRotation:0}}}}});
+}
+document.getElementById('ctrlUsina').innerHTML=DADOS.map((u,i)=>`<button type="button" data-u="${i}" aria-pressed="${i===0}">${u.nome.replace('Paróquia ','')}</button>`).join('');
+document.getElementById('ctrlUsina').addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return; usinaSel=+b.dataset.u; [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed',x===b)); grMensal();});
+document.getElementById('ctrlDias').addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return; nDias=+b.dataset.d; [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed',x===b)); grDiario();});
+document.getElementById('tarifa').addEventListener('input',e=>{const v=parseFloat(e.target.value); if(v>0){tarifa=v; try{localStorage.setItem('ls_tarifa',v)}catch(_){} if(!document.getElementById('v-performance').hidden) render(); else renderFat();}});
+
+/* ---------- usina × fatura ---------- */
+const VINC={}; DADOS.forEach(u=>{ if(!u.instalacao_id || !FAT.ucs[String(u.instalacao_id)]) return; const id=String(u.instalacao_id), tit=FAT.ucs[id].titular;
+  const recebe=Object.keys(FAT.ucs).filter(x=>x!==id && FAT.ucs[x].titular===tit && (FAT.fat[x]||[]).some(r=>r[5]>0) && !(FAT.fat[x]||[]).some(r=>r[4]>0));
+  VINC[u.id]={uc:id, recebe}; });
+const FD = DADOS.filter(u=>VINC[u.id]);
+const dISO = d=>d.toISOString().slice(0,10);
+const pData = s=>{const [d,m,a]=s.split('/'); return new Date(Date.UTC(+a,+m-1,+d));};
+const fmtD = d=>dISO(d).slice(8,10)+'/'+dISO(d).slice(5,7)+'/'+dISO(d).slice(2,4);
+function genPeriodo(u, ini, fim){
+  const dd=Object.fromEntries(u.diarioCompleto||u.diario), mm=Object.fromEntries(u.mensal); let s=0;
+  for(let d=new Date(ini); d<fim; d.setUTCDate(d.getUTCDate()+1)){
+    const k=dISO(d); if(k in dd){ s+=dd[k]; continue; }
+    const nd=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate(); s+=(mm[k.slice(0,7)]||0)/nd;
+  }
+  return s/1000;
+}
+const linhas = id=>(FAT.fat[id]||[]).map(([mk,lt,dias,cons,inj,saldo,total])=>({mk,lt,dias,cons,inj,saldo,total}));
+FD.forEach(u=>{
+  const v=VINC[u.id]; u.ucId=v.uc; u.ucInfo=FAT.ucs[v.uc]; u.recebe=v.recebe;
+  u.ciclos = linhas(v.uc).filter(c=>c.lt && c.mk>=u.instalacao.slice(0,7)).map(c=>{
+    const fim=pData(c.lt), ini=new Date(fim); ini.setUTCDate(ini.getUTCDate()-c.dias);
+    const gen=genPeriodo(u,ini,fim); return {...c, ini, fim, gen, auto:gen-c.inj};
+  }).filter(c=>c.gen>0);
+});
+const soma=(a,f)=>a.reduce((s,x)=>s+f(x),0);
+function resumoFat(u){
+  const c=u.ciclos.slice(-12), gen=soma(c,x=>x.gen), inj=soma(c,x=>x.inj), cons=soma(c,x=>x.cons), pago=soma(c,x=>x.total);
+  const auto=Math.max(0,gen-inj), consTot=cons+auto, ult=u.ciclos[u.ciclos.length-1];
+  const consMed=mediana(c.map(x=>x.cons));
+  let econ = consTot*tarifa - pago, econBenef=0;
+  u.recebe.forEach(id=>{ linhas(id).filter(x=>x.saldo>0||x.inj>0).slice(-12).forEach(x=>{ econBenef += x.cons*tarifa - x.total; }); });
+  const excedente = inj - cons;
+  return {n:c.length, gen, inj, cons, pago, auto, consTot, ult, consMed, econ, econBenef, excedente, pctAuto:auto/gen, cobertura:gen/consTot, mesesSaldo:ult.saldo/consMed};
+}
+function divergencias(){
+  const out=[];
+  FD.forEach(u=>{
+    const cs=u.ciclos, medGen=mediana(cs.slice(-24).map(c=>c.gen)); let pular=-1;
+    cs.forEach((c,i)=>{
+      if(i===pular) return;
+      const r=c.inj/c.gen, prox=cs[i+1], per=`ciclo ${fmtD(c.ini)} a ${fmtD(c.fim)} (fatura ${mesBR(c.mk)})`;
+      if(c.gen>150 && r<0.35){
+        const comp = prox && prox.inj > prox.gen*1.1;
+        if(comp) pular=i+1;
+        out.push({u, mk:c.mk, sev: comp?'warn':'bad', titulo: r===0? 'Fatura sem injeção registrada' : 'Injeção registrada muito abaixo da geração',
+          det:`${per}: a usina gerou ${fmt(c.gen)} kWh, mas a fatura registrou ${fmt(c.inj)} kWh injetados${c.cons===100?' e cobrou só o consumo mínimo de 100 kWh':''}.` + (comp? ` A diferença apareceu na fatura seguinte (${fmt(prox.inj)} kWh injetados para ${fmt(prox.gen)} kWh gerados), sinal de leitura estimada pela distribuidora.` : ' Vale conferir a leitura com a distribuidora.'),
+          valor: comp? 'acertado na fatura seguinte'.replace('na fatura seguinte','depois') : `${fmt(c.gen-c.inj)} kWh a conferir`});
+      } else if(r>1.15){
+        out.push({u, mk:c.mk, sev:'warn', titulo:'Injeção maior que a geração', det:`${per}: fatura com ${fmt(c.inj)} kWh injetados para ${fmt(c.gen)} kWh gerados. Indica acerto de leitura de outro período.`, valor:''});
+      }
+      if(c.gen < 0.6*medGen){
+        out.push({u, mk:c.mk, sev:'bad', titulo:'Queda de geração confirmada na fatura', det:`${per}: a usina gerou ${fmt(c.gen)} kWh, ${fmt((1-c.gen/medGen)*100)}% abaixo do normal dela. A fatura confirma: só ${fmt(c.inj)} kWh injetados, ${fmt(c.cons)} kWh puxados da rede e ${brl(c.total)} pagos.`, valor:`−${fmt(medGen-c.gen)} kWh`});
+      }
+    });
+    const r=resumoFat(u);
+    if(r.mesesSaldo>6){
+      const benef = u.recebe.length? ` Desde ${mesBR(linhas(u.recebe[0]).find(x=>x.saldo>0).mk)} parte do excedente vai para a UC ${FAT.ucs[u.recebe[0]].uc}, que tem ${fmt(linhas(u.recebe[0]).slice(-1)[0].saldo)} kWh de saldo.` : '';
+      const semCred = Object.keys(FAT.ucs).filter(id=>id!==u.ucId && !u.recebe.includes(id) && FAT.ucs[id].titular===u.ucInfo.titular && !linhas(id).some(x=>x.inj>0||x.saldo>0));
+      const sug = semCred.map(id=>{const l=linhas(id).slice(-12); return ` A UC ${FAT.ucs[id].uc}, do mesmo titular, não recebe créditos e paga em média ${brl(soma(l,x=>x.total)/l.length)}/mês (${fmt(soma(l,x=>x.cons)/l.length)} kWh); pode ser incluída no rateio.`;}).join('');
+      out.push({u, mk:'9999', sev:'warn', titulo:`Créditos acumulados equivalem a ${fmt(r.mesesSaldo,1)} meses de consumo da rede`,
+        det:`Saldo de ${fmt(r.ult.saldo)} kWh na UC ${u.ucInfo.uc} (≈ ${brl(r.ult.saldo*tarifa)}). Nos últimos 12 ciclos a injeção superou o consumo da rede em ${fmt(r.excedente)} kWh.${benef}${sug} Os créditos valem 60 meses (Lei 14.300/2022)${sug?'.':': vale avaliar enviar o excedente para outra UC do mesmo titular na mesma distribuidora.'}`, valor:`${fmt(r.ult.saldo)} kWh`});
+    }
+  });
+  // UC que injeta energia sem usina monitorada
+  Object.keys(FAT.fat).filter(id=>!Object.values(VINC).some(v=>v.uc===id||v.recebe.includes(id))).forEach(id=>{
+    const l=linhas(id), inj=l.filter(x=>x.inj>0); if(!inj.length) return;
+    out.push({u:{nome:'UC '+FAT.ucs[id].uc+' · '+FAT.ucs[id].titular}, mk:'9998', sev:'warn', titulo:'UC injeta energia, mas a usina não está monitorada',
+      det:`A UC ${FAT.ucs[id].uc} (${FAT.ucs[id].titular}) recebe em média ${fmt(soma(inj,x=>x.inj)/inj.length)} kWh/mês de injeção desde ${mesBR(inj[0].mk)} e já acumula ${fmt(l[l.length-1].saldo)} kWh de créditos. Não há conta Hoymiles para essa usina na planilha; cadastrar o acesso permite acompanhar a geração dela.`, valor:`${fmt(l[l.length-1].saldo)} kWh`});
+  });
+  return out.sort((a,b)=>b.mk.localeCompare(a.mk));
+}
+let usinaFat=0, chB;
+function renderFat(){
+  if(!FD.length){ document.getElementById('v-faturas').querySelector('section').innerHTML='<div class="panel"><p class="sub">Nenhuma usina está ligada a uma UC com faturas na plataforma.</p></div>'; return; }
+  // vínculos
+  let h='<thead><tr><th>Usina</th><th>UC geradora</th><th>Titular da UC</th><th>Recebe créditos</th><th>Saldo de créditos</th><th>Última fatura</th></tr></thead><tbody>';
+  FD.forEach(u=>{ const r=resumoFat(u);
+    h+=`<tr><td><b>${u.nome}</b><small>${fmt(u.kwp)} kWp · Hoymiles</small></td><td><span class="uc">${u.ucInfo.uc}</span><small>${u.ucInfo.dist}</small></td><td>${u.ucInfo.titular}</td>
+      <td>${u.recebe.length? u.recebe.map(id=>`UC ${FAT.ucs[id].uc}`).join(', ') : '<span class="neutro">só a própria UC</span>'}</td>
+      <td class="num"><b>${fmt(r.ult.saldo)} kWh</b><small>≈ ${fmt(r.mesesSaldo,1)} meses de consumo</small></td><td class="num">${mesBR(r.ult.mk)}<small>leitura ${r.ult.lt}</small></td></tr>`; });
+  Object.keys(FAT.fat).filter(id=>!Object.values(VINC).some(v=>v.uc===id||v.recebe.includes(id)) && linhas(id).some(x=>x.inj>0)).forEach(id=>{ const l=linhas(id), ult=l[l.length-1];
+    h+=`<tr><td><b>Usina sem monitoramento</b><small><span class="tag">sem acesso Hoymiles</span></small></td><td><span class="uc">${FAT.ucs[id].uc}</span><small>${FAT.ucs[id].dist}</small></td><td>${FAT.ucs[id].titular}</td><td><span class="neutro">—</span></td><td class="num"><b>${fmt(ult.saldo)} kWh</b></td><td class="num">${mesBR(ult.mk)}<small>leitura ${ult.lt}</small></td></tr>`; });
+  document.getElementById('tbVinc').innerHTML=h+'</tbody>';
+
+  // KPIs da usina selecionada
+  const u=FD[usinaFat], r=resumoFat(u);
+  document.getElementById('kpiFat').innerHTML=`
+    <div class="kpi"><span class="lbl">Geração</span><span class="val num">${fmt(r.gen/1000,1)}<small>MWh</small></span><span class="det">${r.n} ciclos de leitura</span></div>
+    <div class="kpi"><span class="lbl">Usada na hora</span><span class="val num">${fmt(r.pctAuto*100)}<small>%</small></span><span class="det">${fmt(r.auto)} kWh · ${fmt(r.inj)} kWh foram para a rede</span></div>
+    <div class="kpi"><span class="lbl">Consumo total</span><span class="val num">${fmt(r.consTot/r.n)}<small>kWh/mês</small></span><span class="det">${fmt(r.cons/r.n)} da rede + ${fmt(r.auto/r.n)} direto da usina</span></div>
+    <div class="kpi"><span class="lbl">Cobertura solar</span><span class="val num">${fmt(r.cobertura*100)}<small>%</small></span><span class="det">geração ÷ consumo total</span></div>
+    <div class="kpi"><span class="lbl">Saldo de créditos</span><span class="val num">${fmt(r.ult.saldo)}<small>kWh</small></span><span class="det">≈ ${fmt(r.mesesSaldo,1)} meses de consumo da rede</span></div>
+    <div class="kpi"><span class="lbl">Economia estimada</span><span class="val num" style="color:var(--ok)">${brl(r.econ+r.econBenef)}</span><span class="det">${r.n} ciclos · pagou ${brl(r.pago)}${r.econBenef?` · inclui ${brl(r.econBenef)} da UC que recebe créditos`:''}</span></div>`;
+  document.getElementById('notaBalanco').textContent = `UC ${u.ucInfo.uc} · ${u.ucInfo.titular} · ${u.ucInfo.dist}. Economia estimada = consumo total × tarifa (R$ ${fmt(tarifa,2)}/kWh) − valor pago nas faturas.`;
+
+  // gráfico
+  const cs=u.ciclos.slice(-24);
+  if(chB) chB.destroy();
+  chB=new Chart(document.getElementById('chBalanco'),{data:{labels:cs.map(c=>mesBR(c.mk)),datasets:[
+    {type:'bar',label:'Usada na hora',data:cs.map(c=>Math.max(0,Math.round(c.auto))),backgroundColor:u.cor,stack:'g',borderRadius:3,order:3},
+    {type:'bar',label:'Injetada na rede (fatura)',data:cs.map(c=>c.inj),backgroundColor:u.cor+'66',stack:'g',borderRadius:3,order:3},
+    {type:'line',label:'Consumo da rede (fatura)',data:cs.map(c=>c.cons),borderColor:'#172033',backgroundColor:'#172033',pointRadius:2.5,tension:.2,order:1},
+    {type:'line',label:'Saldo de créditos',data:cs.map(c=>c.saldo),borderColor:'#7b879c',backgroundColor:'#7b879c',borderDash:[5,4],pointRadius:0,yAxisID:'y2',order:2}]},
+   options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{position:'bottom',labels:{boxWidth:12,boxHeight:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.parsed.y)} kWh`, footer:it=>{const c=cs[it[0].dataIndex]; return `Geração no ciclo: ${fmt(c.gen)} kWh · fatura ${brl(c.total)}`;}}}},
+    scales:{x:{stacked:true,ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:12}},y:{stacked:true,beginAtZero:true,title:{display:true,text:'kWh no ciclo'}},y2:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'saldo (kWh)'}}}}});
+
+  // divergências
+  document.getElementById('divs').innerHTML = divergencias().map(d=>`<div class="al ${d.sev}"><span class="pill ${d.sev}">${d.sev==='bad'?'Conferir':'Atenção'}</span>
+    <div><div class="q">${d.u.nome}: ${d.titulo}</div><div class="d">${d.det}</div></div><div class="perda num">${d.valor||''}</div></div>`).join('');
+
+  // antes e depois
+  const casos=FD.flatMap(u=>[[u.ucId,u.nome+' · UC geradora'],...u.recebe.map(r=>[r,u.nome+' · UC que recebe créditos'])]); const semAntes=[];
+  let a='<thead><tr><th>UC</th><th>Antes da usina</th><th>Depois</th><th>Redução por mês</th></tr></thead><tbody>';
+  casos.forEach(([id,nome])=>{ const l=linhas(id); const k=l.findIndex(x=>x.inj>0||x.saldo>0); if(k<1){ semAntes.push(nome); return; }
+    const antes=l.slice(Math.max(0,k-12),k), dep=l.slice(k).slice(-12);
+    const ma=soma(antes,x=>x.total)/antes.length, md=soma(dep,x=>x.total)/dep.length;
+    a+=`<tr><td><b>${nome}</b><small class="neutro">UC ${FAT.ucs[id].uc}</small></td><td class="num">${brl(ma)}/mês <span class="v neutro">${antes.length} faturas</span></td><td class="num">${brl(md)}/mês <span class="v neutro">${dep.length} faturas</span></td><td class="num"><b class="up">${brl(ma-md)}</b> <span class="v up">−${fmt((1-md/ma)*100)}%</span></td></tr>`; });
+  a+=`<tr><td colspan="4" class="neutro" style="text-align:left;white-space:normal">${semAntes.length? semAntes.join(', ')+' não tem faturas anteriores à usina na plataforma. ':''}Os valores de antes incluem as bandeiras tarifárias da época.</td></tr>`;
+  document.getElementById('tbAntes').innerHTML=a+'</tbody>';
+}
+document.getElementById('ctrlFat').innerHTML=FD.map((u,i)=>`<button type="button" data-u="${i}" aria-pressed="${i===0}">${u.nome.replace('Paróquia ','')}</button>`).join('');
+document.getElementById('ctrlFat').addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return; usinaFat=+b.dataset.u; [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed',x===b)); renderFat();});
+
+
+/* ---------- sub-abas ---------- */
+function mostrar(v){
+  if(v!=='faturas') v='performance';
+  document.getElementById('v-performance').hidden = v!=='performance';
+  document.getElementById('v-faturas').hidden = v!=='faturas';
+  document.getElementById('st-performance').setAttribute('aria-selected', v==='performance');
+  document.getElementById('st-faturas').setAttribute('aria-selected', v==='faturas');
+  if(v==='performance'){ render(); grDiario(); grMensal(); } else { renderFat(); }
+}
+window.addEventListener('hashchange',()=>mostrar(location.hash.slice(1)));
+mostrar(location.hash.slice(1));
+
+window.addEventListener('resize',()=>DADOS.forEach((u,i)=>{const cv=document.getElementById('sp'+i); if(cv) spark(cv,u.diaKwhKwp.slice(diasFechados-30,diasFechados),u.cor,u.eventos);}));
+} // montar
+
+const nivelCls = n=>n==='Regular'?'ok':n==='Atenção'?'warn':'bad';
+function renderRel(){
+  if(!REL || !REL.usinas.length){ document.getElementById('rel7').innerHTML=''; document.getElementById('tbRel7').innerHTML=''; return; }
+  const p=REL.periodo; document.getElementById('rel7sub').textContent=`De ${dataBR(p.ini)} a ${dataBR(p.fim)} (dias fechados), comparando cada usina com a vizinha. Mesmo critério do e-mail diário.`;
+  document.getElementById('rel7').innerHTML=REL.usinas.map(u=>{ const c=nivelCls(u.regularidade.nivel);
+    const vs=Number.isFinite(u.var_semana)?`${u.var_semana>=0?'+':''}${fmt(u.var_semana*100)}% vs. semana anterior`:'';
+    return `<article class="us"><div class="us-top"><div><h3>${u.apelido}</h3><div class="loc">${fmt(u.kwp)} kWp · ${u.micros.online}/${u.micros.total} microinversores online</div></div><span class="pill ${c}">${u.regularidade.nivel}</span></div>
+      <dl class="num"><div><dt>7 dias</dt><dd>${fmt(u.total7)} kWh</dd></div><div><dt>Desempenho</dt><dd>${fmt(u.indice7*100)}% do esperado</dd></div>
+      <div><dt>Produtividade</dt><dd>${fmt(u.media_kwp_dia,2)} kWh/kWp/dia</dd></div><div><dt>Variação</dt><dd>${vs||'—'}</dd></div></dl>
+      <p class="reg-motivos"><b>Funcionamento:</b> ${u.regularidade.motivos.join('; ')}.</p>
+      ${u.perda7>0.5?`<p class="reg-motivos" style="color:var(--bad)">Perda estimada na semana: ${fmt(u.perda7,1)} kWh (${brl(u.perda7*tarifa)}).</p>`:''}</article>`;}).join('');
+  const us=REL.usinas; let h='<thead><tr><th>Dia</th>'+us.map(u=>`<th>${u.apelido}</th>`).join('')+'</tr></thead><tbody>';
+  us[0].dias.forEach((_,j)=>{ h+=`<tr><td>${dataBR(us[0].dias[j].dia)}</td>`+us.map(u=>{const x=u.dias[j]; const ruim=x.status==='parada'||x.status==='baixa';
+    return `<td class="num${ruim?' down':''}">${fmt(x.kwh,1)} kWh<small>${fmt(x.pct*100)}% do esperado${x.status==='parada'?' · parada':x.status==='baixa'?' · baixa':x.status==='sem dado'?' · sem dado':''}</small></td>`;}).join('')+'</tr>'; });
+  document.getElementById('tbRel7').innerHTML=h+'</tbody>';
+}
+const fmtDH = s=>{ if(!s) return '—'; const d=new Date(s); return d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); };
+async function renderRobo(){
+  const c=PAINEL.config; if(!c) return; document.getElementById('robo').hidden=false;
+  document.getElementById('roboInfo').textContent=`Roda todo dia às ${c.horario} (Brasília)${c.agendamento?'':' · agendamento desligado'}. Contas S-Miles: ${c.contas.length?c.contas.join(', '):'nenhuma cadastrada'}. E-mail para ${c.para} ${c.email?'pelo '+c.email:'(envio ainda não configurado)'}.`;
+  const u=PAINEL.ultima_execucao, st=document.getElementById('roboStatus');
+  if(PAINEL.em_execucao){ st.innerHTML='<span class="pill warn">Atualizando</span> O robô está lendo o S-Miles agora. A página recarrega ao terminar.'; travar(true); setTimeout(acompanhar,4000); }
+  else if(u){ const cls=u.status==='ok'?'ok':u.status==='parcial'?'warn':'bad';
+    st.innerHTML=`<span class="pill ${cls}">${u.status==='ok'?'Concluída':u.status==='parcial'?'Concluída com avisos':u.status==='rodando'?'Interrompida':'Falhou'}</span> Última execução (${u.tipo==='diario'?'automática':'manual'}) em ${fmtDH(u.inicio)}${u.email?' · e-mail: '+u.email:''}`; }
+  else st.textContent='O robô ainda não rodou.';
+  try{ const ex=await fetch('/api/usinas/execucoes').then(r=>r.json());
+    document.getElementById('roboHist').innerHTML='<thead><tr><th>Início</th><th>Tipo</th><th>Situação</th><th>Detalhes</th></tr></thead><tbody>'+ex.map(e=>`<tr><td>${fmtDH(e.inicio)}</td><td>${e.tipo==='diario'?'automática':'manual'}</td><td>${e.status}</td><td><small style="white-space:pre-wrap">${(e.log||'').replace(/[<&]/g,ch=>ch==='<'?'&lt;':'&amp;')}${e.email?'\n'+e.email:''}</small></td></tr>`).join('')+'</tbody>'; }catch(_){}
+}
+function travar(on){ ['btnAtualizar','btnEnviar'].forEach(id=>document.getElementById(id).disabled=on); }
+async function acompanhar(){ try{ const p=await fetch('/api/usinas/painel').then(r=>r.json()); if(p.em_execucao) return setTimeout(acompanhar,4000); location.reload(); }catch(_){ setTimeout(acompanhar,6000);} }
+async function disparar(enviar){
+  travar(true); const st=document.getElementById('roboStatus');
+  const r=await fetch('/api/usinas/executar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({enviar})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){ st.innerHTML=`<span class="pill bad">Não iniciou</span> ${j.erro||'erro '+r.status}`; travar(false); return; }
+  st.innerHTML=`<span class="pill warn">Atualizando</span> ${j.mensagem} Na primeira vez leva alguns minutos (carrega 90 dias e o histórico mensal).`; setTimeout(acompanhar,4000);
+}
+document.getElementById('btnAtualizar').addEventListener('click',()=>disparar(false));
+document.getElementById('btnEnviar').addEventListener('click',()=>disparar(true));
+
+const somaDias=(iso,n)=>{const d=new Date(iso+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10);};
+async function boot(){
+  const get=u=>fetch(u).then(r=>r.ok?r.json():Promise.reject(new Error(u+' '+r.status)));
+  PAINEL=await get('/api/usinas/painel');
+  renderRobo();
+  if(!PAINEL.usinas.length){ document.getElementById('vazio').hidden=false; document.querySelector('.subtabs').hidden=true; document.getElementById('v-performance').hidden=true; document.getElementById('v-faturas').hidden=true; return; }
+  const [rel, inst, fats]=await Promise.all([get('/api/usinas/relatorio'), get('/api/instalacoes').catch(()=>[]), get('/api/faturas').catch(()=>[])]);
+  REL=rel;
+  inst.forEach(i=>{ FAT.ucs[String(i.id)]={uc:i.codigo, apelido:i.apelido, titular:i.titular_nome, dist:i.distribuidora||''}; });
+  fats.filter(f=>/^\d{4}-\d\d$/.test(f.mes_key||'')).sort((a,b)=>a.mes_key.localeCompare(b.mes_key)).forEach(f=>{ (FAT.fat[String(f.instalacao_id)]=FAT.fat[String(f.instalacao_id)]||[]).push([f.mes_key,f.leitura||'',+f.dias||0,+f.consumo||0,+f.inj||0,+f.saldo||0,+f.total||0]); });
+  const dias90=[]; for(let i=90;i>=0;i--) dias90.push(somaDias(PAINEL.hoje,-i));
+  DADOS=PAINEL.usinas.map(u=>{ const m=new Map(u.diario), tr=u.tempo_real||{};
+    return { id:u.sid, conta:u.conta, nome:u.apelido, local:u.regiao==='MG'?'Minas Gerais':'São Paulo/SP', regiao:u.regiao, kwp:u.kwp,
+      instalacao:u.instalacao||dias90[0], instalador:u.instalador, micros:(u.micros||[]).map(x=>({...x,warn:x.alarme})),
+      real:{today_eq:+tr.today_eq||0, month_eq:+tr.month_eq||0, total_eq:+tr.total_eq||0, real_power:+tr.real_power||0, data_time:tr.last_data_time||tr.data_time||''},
+      mensal:u.mensal, diario:dias90.map(d=>[d, m.has(d)?m.get(d):null]), diarioCompleto:u.diario, instalacao_id:u.instalacao_id };
+  });
+  REFS=(PAINEL.referencias||[]).map(r=>{ const m=new Map(r.diario); return { regiao:r.regiao, diaKwhKwp:dias90.map(d=>m.has(d)?m.get(d):NaN) }; });
+  montar();
+}
+boot().catch(e=>{ const v=document.getElementById('vazio'); v.hidden=false; v.innerHTML='<h2>Não foi possível carregar as usinas</h2><p class="sub">'+e.message+'</p>'; });
+</script>
+
+</body>
+</html>
