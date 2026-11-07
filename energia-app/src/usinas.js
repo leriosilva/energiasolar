@@ -497,12 +497,22 @@ export function htmlRelatorio(rel, { url = process.env.PUBLIC_URL || "https://en
 export async function enviarEmail({ assunto, html }) {
   const para = process.env.RELATORIO_PARA || "otaviolerio@outlook.com";
   if (process.env.EMAIL_WEBHOOK_URL) {
-    const r = await fetch(process.env.EMAIL_WEBHOOK_URL, {
-      method: "POST", redirect: "follow", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: process.env.EMAIL_WEBHOOK_TOKEN || "", para, assunto, html }),
+    const url = process.env.EMAIL_WEBHOOK_URL.trim();
+    // O Apps Script executa o doPost e responde 302 para a página com o resultado: segue o redirecionamento
+    // manualmente com GET (alguns clientes refazem o POST sem o corpo e caem na página de erro).
+    let r = await fetch(url, {
+      method: "POST", redirect: "manual", headers: { "content-type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: (process.env.EMAIL_WEBHOOK_TOKEN || "").trim(), para, assunto, html }),
     });
+    for (let i = 0; i < 3 && r.status >= 300 && r.status < 400 && r.headers.get("location"); i++) {
+      r = await fetch(new URL(r.headers.get("location"), url), { method: "GET", redirect: "manual" });
+    }
     const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch {}
-    if (!r.ok || !j?.ok) throw new Error("o script do Google não enviou: " + (j?.erro || `HTTP ${r.status} ${txt.slice(0, 160)}`));
+    if (!j?.ok) {
+      const msg = j?.erro || ((txt.match(/<title>([^<]*)/i) || [])[1] || "") + " " +
+        txt.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+      throw new Error(`o script do Google não enviou (HTTP ${r.status}): ${msg}`);
+    }
     return `enviado pelo Gmail (script do Google) para ${para}`;
   }
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
