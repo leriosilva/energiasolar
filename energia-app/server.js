@@ -14,6 +14,7 @@ import { pool, migrate, query } from "./src/db.js";
 import { normalizarLinha, normalizarCodigo, parseMes, removerAcentos } from "./src/parsing.js";
 import crypto from "crypto";
 import { instalarAutenticacao } from "./src/auth.js";
+import { instalarUsinas } from "./src/usinas.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PYTHON_BIN = process.env.PYTHON_BIN || "python3";
@@ -24,6 +25,8 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: "5mb" }));
 // login, perfis e acessos por titular (src/auth.js) - antes dos arquivos e das rotas
 instalarAutenticacao(app, { publicDir: path.join(__dirname, "public") });
+// módulo Usinas: painel, relatório e robô diário do S-Miles (src/usinas.js)
+instalarUsinas(app, { publicDir: path.join(__dirname, "public") });
 app.use(express.static(path.join(__dirname, "public")));
 
 const upload = multer({
