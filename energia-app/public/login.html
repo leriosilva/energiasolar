@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrar · Plataforma de Faturas · Lério &amp; Silva</title>
+<style>
+  :root { color-scheme: light; --azul:#1b2b44; --dourado:#b8924a; --borda:#d6dde7; --fundo:#f4f6f9; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:var(--fundo); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--azul); padding:16px; }
+  .card { width:100%; max-width:380px; background:#fff; border:1px solid var(--borda); border-radius:14px;
+          padding:32px 28px; box-shadow:0 8px 24px rgba(27,43,68,.08); }
+  .marca { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+  .logo { width:44px; height:44px; border-radius:10px; background:var(--azul); color:#fff; display:flex;
+          align-items:center; justify-content:center; font-weight:800; letter-spacing:1px; }
+  .marca b { display:block; font-size:16px; letter-spacing:.5px; }
+  .marca small { color:#6b7a90; font-size:12px; }
+  h1 { font-size:18px; margin:0 0 18px; }
+  label { display:block; font-size:13px; font-weight:600; margin:14px 0 6px; }
+  input { width:100%; padding:11px 12px; border:1px solid var(--borda); border-radius:8px; font-size:15px; }
+  input:focus { outline:2px solid #9fb3cf; border-color:#9fb3cf; }
+  button { width:100%; margin-top:22px; padding:12px; border:0; border-radius:8px; background:var(--azul);
+           color:#fff; font-size:15px; font-weight:700; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:wait; }
+  .erro { color:#b42318; font-size:13px; margin-top:14px; min-height:18px; }
+  .rodape { margin-top:18px; font-size:12px; color:#8a97a8; text-align:center; }
+  .rodape span { color:var(--dourado); }
+</style>
+</head>
+<body>
+  <form class="card" id="f" autocomplete="on">
+    <div class="marca"><div class="logo">LS</div><div><b>LÉRIO &amp; SILVA</b><small>Plataforma de faturas de energia</small></div></div>
+    <h1>Entrar</h1>
+    <label for="usuario">Usuário</label>
+    <input id="usuario" name="username" autocomplete="username" required autofocus>
+    <label for="senha">Senha</label>
+    <input id="senha" name="password" type="password" autocomplete="current-password" required>
+    <button id="b" type="submit">Entrar</button>
+    <div class="erro" id="erro" role="alert"></div>
+    <div class="rodape">Contabilidade estratégica <span>•</span> Gestão de faturas</div>
+  </form>
+<script>
+document.getElementById("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const b = document.getElementById("b"), erro = document.getElementById("erro");
+  b.disabled = true; erro.textContent = "";
+  try {
+    const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: document.getElementById("usuario").value, senha: document.getElementById("senha").value }) });
+    if (r.ok) { window.location.href = "/"; return; }
+    erro.textContent = (await r.json().catch(() => ({}))).erro || "Não foi possível entrar.";
+  } catch { erro.textContent = "Falha de conexão."; }
+  b.disabled = false;
+});
+</script>
+</body>
+</html>
