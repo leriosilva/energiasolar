@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usuários e acessos · Plataforma de Faturas</title>
+<style>
+  :root { color-scheme: light; --azul:#1b2b44; --borda:#d6dde7; --fundo:#f4f6f9; --cinza:#6b7a90; --verde:#1a7f37; --verm:#b42318; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--azul); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { background:#fff; border-bottom:1px solid var(--borda); padding:14px 20px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; flex:1; }
+  a.voltar, button { font:600 13px system-ui,sans-serif; border-radius:8px; padding:8px 14px; cursor:pointer; text-decoration:none; }
+  a.voltar, .sec { border:1px solid var(--borda); background:#fff; color:var(--azul); }
+  .pri { border:0; background:var(--azul); color:#fff; }
+  .perigo { border:1px solid #f1c4c0; background:#fff; color:var(--verm); }
+  main { max-width:1080px; margin:0 auto; padding:20px 16px 40px; display:grid; grid-template-columns: 1fr 380px; gap:20px; }
+  @media (max-width: 860px) { main { grid-template-columns:1fr; } }
+  .card { background:#fff; border:1px solid var(--borda); border-radius:12px; padding:18px; }
+  .card h2 { font-size:15px; margin:0 0 12px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:9px 8px; border-bottom:1px solid #edf0f4; vertical-align:top; }
+  th { font-size:12px; color:var(--cinza); font-weight:600; text-transform:uppercase; letter-spacing:.3px; }
+  tr.sel { background:#f0f4fa; }
+  tbody tr { cursor:pointer; }
+  .tag { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; background:#eef2f7; }
+  .tag.admin { background:#1b2b44; color:#fff; }
+  .tag.off { background:#fdecea; color:var(--verm); }
+  label { display:block; font-size:13px; font-weight:600; margin:12px 0 5px; }
+  input[type=text], input[type=password], select { width:100%; padding:9px 10px; border:1px solid var(--borda); border-radius:8px; font-size:14px; }
+  .titulares { max-height:260px; overflow:auto; border:1px solid var(--borda); border-radius:8px; padding:6px 10px; }
+  .titulares label { font-weight:500; margin:6px 0; display:flex; gap:8px; align-items:center; }
+  .linha { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+  .msg { font-size:13px; margin-top:12px; min-height:18px; }
+  .msg.ok { color:var(--verde); } .msg.err { color:var(--verm); }
+  .ajuda { font-size:12px; color:var(--cinza); margin-top:4px; }
+  .vazio { color:var(--cinza); font-size:14px; padding:12px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Usuários e acessos</h1>
+  <a class="voltar" href="/">← Voltar à plataforma</a>
+</header>
+<main>
+  <section class="card">
+    <h2>Usuários cadastrados</h2>
+    <table>
+      <thead><tr><th>Usuário</th><th>Nome</th><th>Perfil</th><th>Titulares liberados</th></tr></thead>
+      <tbody id="lista"></tbody>
+    </table>
+    <div class="vazio" id="vazio" hidden>Nenhum usuário cadastrado. Use o formulário ao lado para criar o primeiro.</div>
+    <p class="ajuda">O administrador principal (definido no Railway) não aparece nesta lista.</p>
+  </section>
+
+  <section class="card">
+    <h2 id="titForm">Novo usuário</h2>
+    <form id="f" autocomplete="off">
+      <label for="usuario">Usuário (login)</label>
+      <input type="text" id="usuario" required>
+      <label for="nome">Nome</label>
+      <input type="text" id="nome">
+      <label for="senha">Senha</label>
+      <input type="password" id="senha" autocomplete="new-password">
+      <div class="ajuda" id="ajudaSenha">Mínimo de 8 caracteres.</div>
+      <label for="perfil">Perfil</label>
+      <select id="perfil">
+        <option value="usuario">Usuário — só consulta os titulares liberados</option>
+        <option value="admin">Administrador — acesso total</option>
+      </select>
+      <label for="ativo"><input type="checkbox" id="ativo" checked> Acesso ativo</label>
+      <label>Titulares (contas) liberados</label>
+      <div class="titulares" id="titulares"></div>
+      <div class="linha">
+        <button class="pri" type="submit" id="salvar">Criar usuário</button>
+        <button class="sec" type="button" id="novo">Novo</button>
+        <button class="perigo" type="button" id="excluir" hidden>Excluir</button>
+      </div>
+      <div class="msg" id="msg" role="status"></div>
+    </form>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let titulares = [], usuarios = [], editando = null;
+
+async function api(url, opt = {}) {
+  const r = await fetch(url, opt);
+  if (r.status === 401) { location.href = "/login"; throw new Error("Sessão expirada"); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.erro || "Erro " + r.status);
+  return j;
+}
+const json = (method, body) => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+function msg(t, tipo) { $("msg").textContent = t; $("msg").className = "msg " + (tipo || ""); }
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function renderTitulares(sel = []) {
+  const s = new Set(sel.map(Number));
+  $("titulares").innerHTML = titulares.length
+    ? titulares.map((t) => `<label><input type="checkbox" value="${t.id}" ${s.has(t.id) ? "checked" : ""}> ${esc(t.nome)}</label>`).join("")
+    : '<div class="vazio">Nenhum titular cadastrado.</div>';
+}
+function renderLista() {
+  const nomeT = Object.fromEntries(titulares.map((t) => [t.id, t.nome]));
+  $("vazio").hidden = usuarios.length > 0;
+  $("lista").innerHTML = usuarios.map((u) => `
+    <tr data-id="${u.id}" class="${editando === u.id ? "sel" : ""}">
+      <td>${esc(u.usuario)}</td><td>${esc(u.nome)}</td>
+      <td><span class="tag ${u.perfil === "admin" ? "admin" : ""}">${u.perfil === "admin" ? "Admin" : "Usuário"}</span>
+          ${u.ativo ? "" : '<span class="tag off">Inativo</span>'}</td>
+      <td>${u.perfil === "admin" ? "Todos" : (u.titulares || []).map((id) => esc(nomeT[id] || "#" + id)).join("<br>") || "—"}</td>
+    </tr>`).join("");
+  document.querySelectorAll("#lista tr").forEach((tr) => tr.addEventListener("click", () => editar(Number(tr.dataset.id))));
+}
+function limpar() {
+  editando = null; $("f").reset(); $("ativo").checked = true; $("usuario").disabled = false;
+  $("titForm").textContent = "Novo usuário"; $("salvar").textContent = "Criar usuário"; $("excluir").hidden = true;
+  $("ajudaSenha").textContent = "Mínimo de 8 caracteres."; renderTitulares(); renderLista(); msg("");
+}
+function editar(id) {
+  const u = usuarios.find((x) => x.id === id); if (!u) return;
+  editando = id; $("usuario").value = u.usuario; $("usuario").disabled = true; $("nome").value = u.nome || "";
+  $("senha").value = ""; $("perfil").value = u.perfil; $("ativo").checked = u.ativo;
+  $("titForm").textContent = "Editar " + u.usuario; $("salvar").textContent = "Salvar alterações"; $("excluir").hidden = false;
+  $("ajudaSenha").textContent = "Deixe em branco para manter a senha atual.";
+  renderTitulares(u.titulares || []); renderLista(); msg("");
+}
+async function carregar() {
+  [titulares, usuarios] = await Promise.all([api("/api/titulares"), api("/api/admin/usuarios")]);
+  titulares = titulares.map((t) => ({ id: Number(t.id), nome: t.nome }));
+  usuarios = usuarios.map((u) => ({ ...u, titulares: (u.titulares || []).map(Number) }));
+}
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const corpo = { nome: $("nome").value.trim(), perfil: $("perfil").value, ativo: $("ativo").checked,
+    titulares: [...document.querySelectorAll("#titulares input:checked")].map((c) => Number(c.value)) };
+  if ($("senha").value) corpo.senha = $("senha").value;
+  try {
+    if (editando) { await api("/api/admin/usuarios/" + editando, json("PUT", corpo)); }
+    else {
+      if (!corpo.senha) throw new Error("Informe uma senha.");
+      corpo.usuario = $("usuario").value.trim();
+      const r = await api("/api/admin/usuarios", json("POST", corpo)); editando = r.id;
+    }
+    await carregar(); const id = editando; editar(id); msg("Salvo.", "ok");
+  } catch (err) { msg(err.message, "err"); }
+});
+$("novo").addEventListener("click", limpar);
+$("excluir").addEventListener("click", async () => {
+  const u = usuarios.find((x) => x.id === editando);
+  if (!u || !confirm(`Excluir o usuário "${u.usuario}"? Ele perde o acesso imediatamente.`)) return;
+  try { await api("/api/admin/usuarios/" + u.id, { method: "DELETE" }); await carregar(); limpar(); msg("Usuário excluído.", "ok"); }
+  catch (err) { msg(err.message, "err"); }
+});
+carregar().then(limpar).catch((e) => msg(e.message, "err"));
+</script>
+</body>
+</html>
