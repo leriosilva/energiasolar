@@ -7,7 +7,7 @@
 //
 // Variáveis de ambiente (Railway):
 //   HOYMILES_CONTAS      contas do S-Miles, uma por linha ou separadas por ";"  ->  usuario:senha
-//   ROBO_HORARIO         horário diário em Brasília (padrão 17:00)
+//   ROBO_HORARIO         horário diário em Brasília (padrão 07:00)
 //   RELATORIO_PARA       destinatário(s) do e-mail (padrão otaviolerio@outlook.com)
 //   EMAIL_WEBHOOK_URL    endereço do script do Google que envia pelo Gmail (recomendado no Railway)
 //   EMAIL_WEBHOOK_TOKEN  senha combinada com o script do Google
@@ -20,6 +20,7 @@ import path from "path";
 import { query } from "./db.js";
 
 const TZ = "America/Sao_Paulo";
+export const HORARIO_PADRAO = "07:00";
 const BASES = { 1: "https://euapi.hoymiles.com" };
 const BASE_PADRAO = process.env.HOYMILES_BASE || "https://neapi.hoymiles.com";
 const P_ENERGIA = "/pvm-data/api/0/station/data3/ceqc_a";
@@ -351,7 +352,8 @@ export function montarRelatorio(usinas, { hoje = hojeBR(), agora = new Date() } 
     const horasSem = ultima ? (agora - ultima) / 3600e3 : Infinity;
     const hBR = Number(horaBR(agora).slice(0, 2));
     const diurno = hBR >= 8 && hBR < 18; // à noite os microinversores desligam (sem sol) e o S-Miles os mostra desconectados
-    const semComunicacao = diurno && horasSem > 3;
+    // de dia: mais de 3 h sem dado; de manhã cedo/à noite: nenhum dado desde a tarde do dia anterior
+    const semComunicacao = diurno ? horasSem > 3 : horasSem > 16;
     const micOffDia = diurno ? micOff : 0;
     const motivos = [];
     if (parados) motivos.push(`${parados} dia(s) sem geração enquanto a referência gerou normalmente`);
@@ -371,6 +373,35 @@ export function montarRelatorio(usinas, { hoje = hojeBR(), agora = new Date() } 
       ? "geração dentro do esperado todos os dias; microinversores desligados agora porque é noite"
       : "geração dentro do esperado todos os dias, microinversores online e sem alarme");
     const tr = u.tempo_real || {};
+    // ---- status de funcionamento (para ação dos gestores): foco no último dia fechado e no agora
+    const ontem = diasRep[diasRep.length - 1] || {};
+    const snOff = micros.filter((m) => m.conectado === false).map((m) => m.sn).filter(Boolean);
+    const snAlarme = micros.filter((m) => m.alarme).map((m) => m.sn).filter(Boolean);
+    const acoes = [];
+    if (ontem.status === "parada")
+      acoes.push({ grav: "alta", alerta: `Não gerou ontem (${dataBR(ontem.dia)})`,
+        acao: "Verificar no local disjuntores/DPS do quadro solar e se há energia da rede; conferir o app S-Miles e acionar o instalador." });
+    else if (ontem.status === "baixa")
+      acoes.push({ grav: "media", alerta: `Geração de ontem em ${Number.isFinite(ontem.pct) ? fmt(ontem.pct * 100) + "%" : "—"} do esperado`,
+        acao: "Conferir no S-Miles se algum microinversor/painel ficou zerado; verificar sombreamento ou sujeira." });
+    if (semComunicacao)
+      acoes.push({ grav: "alta", alerta: `Sem comunicação com o S-Miles há ${Number.isFinite(horasSem) ? fmt(horasSem) + " h" : "tempo indeterminado"}`,
+        acao: "Verificar internet/Wi-Fi do local e o DTU (desligar e ligar da tomada); se continuar, acionar o instalador." });
+    if (micOffDia)
+      acoes.push({ grav: micOff === micros.length ? "alta" : "media", alerta: `${micOff} de ${micros.length} microinversor(es) desconectado(s)`,
+        acao: `Acionar o instalador para checar ${snOff.length ? "os microinversores " + snOff.join(", ") : "os microinversores desconectados"} (conectores, disjuntor do circuito).` });
+    if (micAlarme)
+      acoes.push({ grav: "media", alerta: `${micAlarme} microinversor(es) com alarme`,
+        acao: `Abrir os alarmes no S-Miles${snAlarme.length ? " (" + snAlarme.join(", ") + ")" : ""} e repassar ao instalador.` });
+    if (parados > (ontem.status === "parada" ? 1 : 0) || baixos >= 2)
+      acoes.push({ grav: "media", alerta: `Semana com ${parados ? parados + " dia(s) parada" : ""}${parados && baixos ? " e " : ""}${baixos ? baixos + " dia(s) com geração baixa" : ""}`,
+        acao: "Comparar dia a dia no painel; se recorrente, agendar inspeção técnica." });
+    if (indBaixo && !acoes.length)
+      acoes.push({ grav: indMuitoBaixo ? "alta" : "media", alerta: `Desempenho da semana em ${fmt(indice7 * 100)}% do esperado`,
+        acao: "Agendar limpeza dos painéis e inspeção de sombreamento/strings." });
+    if (semDado)
+      acoes.push({ grav: "baixa", alerta: `${semDado} dia(s) sem dado no S-Miles`, acao: "Conferir se o DTU está enviando os dados ao S-Miles." });
+    const operacao = acoes.some((a) => a.grav === "alta") ? "Anomalia" : acoes.length ? "Atenção" : "Operando normalmente";
     return {
       sid: u.sid, apelido: u.apelido, kwp: u.kwp, regiao: u.regiao, vizinhas: u.vizinhas,
       total7, esperado7, indice7, prev7, var_semana: prev7 > 0 ? total7 / prev7 - 1 : NaN,
@@ -380,6 +411,8 @@ export function montarRelatorio(usinas, { hoje = hojeBR(), agora = new Date() } 
       micros: { total: micros.length, online: micros.length - micOff, alarme: micAlarme },
       ultima_comunicacao: ultima ? ultima.toISOString() : null,
       regularidade: { nivel, motivos },
+      status: { operacao, acoes, ontem_kwh: ontem.kwh, ontem_pct: ontem.pct, ontem_status: ontem.status, ontem_dia: ontem.dia,
+                diurno, horas_sem_dado: Number.isFinite(horasSem) ? horasSem : null, micros_off: snOff, micros_alarme: snAlarme },
       eventos90: u.eventos.map(({ fimIdx, ...e }) => e),
     };
   });
@@ -418,16 +451,22 @@ async function relatorioDoUsuario(titulares) {
 const COR = { Regular: ["#12805c", "#e3f4ec"], "Atenção": ["#b76a00", "#fdf1de"], Irregular: ["#b42318", "#fde8e6"] };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+const COR_OP = { "Anomalia": ["#b42318", "#fde8e6", "●"], "Atenção": ["#b76a00", "#fdf1de", "●"], "Operando normalmente": ["#12805c", "#e3f4ec", "●"] };
+
 export function assuntoRelatorio(rel) {
   const c = rel.contagem, partes = [];
+  const anom = rel.usinas.filter((u) => u.status?.operacao === "Anomalia").map((u) => u.apelido);
+  const aten = rel.usinas.filter((u) => u.status?.operacao === "Atenção").map((u) => u.apelido);
+  const prefixo = anom.length ? `[AÇÃO NECESSÁRIA: ${anom.join(", ")}] ` : aten.length ? `[ATENÇÃO: ${aten.join(", ")}] ` : "[OK] ";
   if (c.Irregular) partes.push(`${c.Irregular} irregular${c.Irregular > 1 ? "es" : ""}`);
   if (c["Atenção"]) partes.push(`${c["Atenção"]} em atenção`);
   if (c.Regular) partes.push(`${c.Regular} regular${c.Regular > 1 ? "es" : ""}`);
-  return `Usinas solares · ${dataBR(rel.hoje)} · ${partes.join(", ") || "sem dados"}`;
+  return `${prefixo}Usinas solares · ${dataBR(rel.hoje)} · ${partes.join(", ") || "sem dados"}`;
 }
 
 export function htmlRelatorio(rel, { url = process.env.PUBLIC_URL || "https://energiasolar-production.up.railway.app", falhas = [] } = {}) {
   const pct = (x) => (Number.isFinite(x) ? fmt(x * 100) + "%" : "—");
+  const manha = Number(horaBR(new Date(rel.gerado_em)).slice(0, 2)) < 10;
   const td = "padding:7px 8px;border-bottom:1px solid #e3e8f4;font-size:13px;";
   const th = "padding:7px 8px;border-bottom:2px solid #dde4f5;font-size:11px;color:#5d6a84;text-transform:uppercase;letter-spacing:.04em;text-align:right;";
   const cartoes = rel.usinas.map((u) => {
@@ -444,7 +483,9 @@ export function htmlRelatorio(rel, { url = process.env.PUBLIC_URL || "https://en
             <td style="font-size:12px;color:#5d6a84">7 dias<br><b style="font-size:18px;color:#1a2456">${fmt(u.total7)} kWh</b><br>${varS}</td>
             <td style="font-size:12px;color:#5d6a84">Desempenho<br><b style="font-size:18px;color:${u.indice7 >= (u.vizinhas ? 0.9 : 0.7) ? "#12805c" : u.indice7 >= (u.vizinhas ? 0.75 : 0.5) ? "#b76a00" : "#b42318"}">${pct(u.indice7)}</b><br>do esperado</td>
             <td style="font-size:12px;color:#5d6a84">Produtividade<br><b style="font-size:18px;color:#1a2456">${fmt(u.media_kwp_dia, 2)}</b><br>kWh/kWp/dia</td>
-            <td style="font-size:12px;color:#5d6a84">Hoje até agora<br><b style="font-size:18px;color:#1a2456">${fmt(u.hoje_kwh, 1)} kWh</b><br>${u.micros.online}/${u.micros.total} micros online</td>
+            ${manha
+              ? `<td style="font-size:12px;color:#5d6a84">Ontem<br><b style="font-size:18px;color:#1a2456">${Number.isFinite(u.status?.ontem_kwh) ? fmt(u.status.ontem_kwh, 1) : "—"} kWh</b><br>${pct(u.status?.ontem_pct)} do esperado</td>`
+              : `<td style="font-size:12px;color:#5d6a84">Hoje até agora<br><b style="font-size:18px;color:#1a2456">${fmt(u.hoje_kwh, 1)} kWh</b><br>${u.micros.online}/${u.micros.total} micros online</td>`}
           </tr></table>
           <p style="margin:10px 0 0;font-size:13px;color:#172033"><b>Funcionamento:</b> ${u.regularidade.motivos.map(esc).join("; ")}.</p>
           ${u.perda7 > 0.5 ? `<p style="margin:6px 0 0;font-size:13px;color:#b42318">Perda estimada na semana: ${fmt(u.perda7, 1)} kWh.</p>` : ""}
@@ -461,18 +502,63 @@ export function htmlRelatorio(rel, { url = process.env.PUBLIC_URL || "https://en
     return `<tr><td style="${td}white-space:nowrap">${dataBR(d)}</td>${cel}</tr>`;
   }).join("");
   const t = rel.totais;
+  const nAnom = rel.usinas.filter((u) => u.status?.operacao === "Anomalia").length;
+  const nAten = rel.usinas.filter((u) => u.status?.operacao === "Atenção").length;
+  const [bCor, bFundo] = nAnom ? COR_OP["Anomalia"] : nAten ? COR_OP["Atenção"] : COR_OP["Operando normalmente"];
+  const bTexto = nAnom ? `AÇÃO NECESSÁRIA · ${nAnom} usina(s) com anomalia de funcionamento`
+    : nAten ? `ATENÇÃO · ${nAten} usina(s) para acompanhar` : `TODAS AS USINAS OPERANDO NORMALMENTE`;
+  const bSub = nAnom || nAten ? "Veja abaixo o que foi detectado e a ação recomendada para cada usina."
+    : "Geração de ontem dentro do esperado, comunicação com o S-Miles ativa e microinversores sem alarme.";
+  const ultCom = (u) => {
+    if (!u.ultima_comunicacao) return "sem registro";
+    const d = new Date(u.ultima_comunicacao);
+    return `${hojeBR(d) === rel.hoje ? "hoje" : dataBR(hojeBR(d))} ${horaBR(d)}`;
+  };
+  const linhasStatus = rel.usinas.map((u) => {
+    const st = u.status || { operacao: "Atenção", acoes: [] };
+    const [cor, fundo] = COR_OP[st.operacao] || COR_OP["Atenção"];
+    const ontemTxt = Number.isFinite(st.ontem_kwh) ? `${fmt(st.ontem_kwh, 1)} kWh · ${Number.isFinite(st.ontem_pct) ? fmt(st.ontem_pct * 100) + "%" : "—"} do esperado` : "sem dado";
+    const acoes = st.acoes.length ? `<tr><td colspan="4" style="padding:0 12px 12px">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">${st.acoes.map((a) => `
+          <tr><td style="padding:8px 10px;border-radius:6px;background:${a.grav === "alta" ? "#fde8e6" : a.grav === "media" ? "#fdf1de" : "#eef1f9"};font-size:13px;color:#172033">
+            <b style="color:${a.grav === "alta" ? "#b42318" : a.grav === "media" ? "#b76a00" : "#5d6a84"}">${esc(a.alerta)}</b><br>
+            <span style="color:#172033">→ Ação: ${esc(a.acao)}</span></td></tr><tr><td style="height:6px"></td></tr>`).join("")}
+        </table></td></tr>` : "";
+    return `<tr><td style="padding:0 0 10px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #dde4f5;border-left:6px solid ${cor};border-radius:10px;background:#fff">
+      <tr>
+        <td style="padding:12px 12px 10px;font-size:15px;font-weight:700;color:#172033">${esc(u.apelido)}<br>
+          <span style="display:inline-block;margin-top:5px;padding:3px 10px;border-radius:999px;background:${fundo};color:${cor};font-size:12px;font-weight:700">${st.operacao.toUpperCase()}</span></td>
+        <td style="padding:12px 6px 10px;font-size:12px;color:#5d6a84">Ontem<br><b style="font-size:14px;color:${st.ontem_status === "parada" || st.ontem_status === "baixa" ? "#b42318" : "#1a2456"}">${ontemTxt}</b></td>
+        <td style="padding:12px 6px 10px;font-size:12px;color:#5d6a84">Última comunicação<br><b style="font-size:14px;color:${u.regularidade.motivos.some((m) => m.startsWith("sem comunicação")) ? "#b42318" : "#1a2456"}">${ultCom(u)}</b></td>
+        <td style="padding:12px 12px 10px 6px;font-size:12px;color:#5d6a84">Microinversores<br><b style="font-size:14px;color:${st.diurno && u.micros.online < u.micros.total ? "#b42318" : "#1a2456"}">${st.diurno ? `${u.micros.online}/${u.micros.total} online` : `${u.micros.total} · fora do horário de sol`}</b>${u.micros.alarme ? `<br><span style="color:#b42318">${u.micros.alarme} com alarme</span>` : ""}</td>
+      </tr>${acoes}</table></td></tr>`;
+  }).join("");
+  const painelStatus = `
+    <tr><td style="padding:0 0 14px">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${bFundo};border:2px solid ${bCor};border-radius:12px">
+        <tr><td style="padding:14px 16px">
+          <div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5d6a84;font-weight:700">Status de funcionamento</div>
+          <div style="font-size:19px;font-weight:800;color:${bCor};margin-top:3px">${bTexto}</div>
+          <div style="font-size:13px;color:#172033;margin-top:3px">${bSub}</div>
+        </td></tr></table></td></tr>
+    ${linhasStatus}
+    <tr><td style="padding:0 0 4px;font-size:11px;color:#5d6a84">Anomalia = exige ação hoje (usina parada, sem comunicação ou todos os microinversores desconectados). Atenção = acompanhar. ${manha ? "De manhã cedo os microinversores ainda podem estar ligando com o sol; a conexão deles só é cobrada entre 8h e 18h." : ""}</td></tr>
+    <tr><td style="height:14px"></td></tr>
+    <tr><td style="padding:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5d6a84;font-weight:700">Performance dos últimos 7 dias</td></tr>`;
   const avisoFalha = falhas.length ? `<p style="margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#fde8e6;color:#b42318;font-size:13px">
      O robô não conseguiu ler ${falhas.length} conta(s) do S-Miles hoje: ${falhas.map((f) => esc(f.conta) + " (" + esc(f.erro) + ")").join("; ")}. Os números dessas usinas são da última leitura bem-sucedida.</p>` : "";
   return `<!doctype html><html><body style="margin:0;background:#eef1f9;font-family:Segoe UI,Arial,sans-serif;color:#172033">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef1f9"><tr><td align="center" style="padding:20px 12px">
   <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%">
-    <tr><td style="background:#1a2456;border-radius:14px 14px 0 0;padding:18px 20px;color:#fff">
+    <tr><td style="background:#1a2456;border-radius:14px;padding:18px 20px;color:#fff">
       <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#f3dcae">Lério &amp; Silva · Usinas solares</div>
       <div style="font-size:22px;font-weight:700;margin-top:4px">Relatório de performance · ${dataBR(rel.hoje)}</div>
       <div style="font-size:13px;color:#d6dcf2;margin-top:4px">Últimos 7 dias (${dataBR(rel.periodo.ini)} a ${dataBR(rel.periodo.fim)}) · fonte: S-Miles Cloud (Hoymiles)</div>
     </td></tr>
-    <tr><td style="background:#fff;padding:16px 20px;border-radius:0 0 14px 14px">
-      ${avisoFalha}
+    <tr><td style="height:14px"></td></tr>
+    ${avisoFalha ? `<tr><td>${avisoFalha}</td></tr>` : ""}
+    ${painelStatus}
+    <tr><td style="background:#fff;padding:16px 20px;border-radius:14px;border:1px solid #dde4f5">
       <table role="presentation" width="100%"><tr>
         <td style="font-size:12px;color:#5d6a84">Geração 7 dias<br><b style="font-size:20px;color:#1a2456">${fmt(t.kwh7)} kWh</b></td>
         <td style="font-size:12px;color:#5d6a84">Esperado<br><b style="font-size:20px;color:#1a2456">${fmt(t.esperado7)} kWh</b></td>
@@ -564,7 +650,7 @@ export async function executar({ tipo = "manual", enviar = true, cliente, contas
 
 export function iniciarAgendador() {
   if (/^(sim|true|1)$/i.test(process.env.ROBO_DESATIVADO || "")) { console.log("[usinas] agendamento desativado"); return; }
-  const horario = (process.env.ROBO_HORARIO || "17:00").padStart(5, "0");
+  const horario = (process.env.ROBO_HORARIO || HORARIO_PADRAO).padStart(5, "0");
   console.log(`[usinas] robô diário agendado para ${horario} (Brasília)`);
   const tick = async () => {
     try {
@@ -607,7 +693,7 @@ export function instalarUsinas(app, { publicDir }) {
     res.json({
       hoje: hojeBR(), usinas, referencias, ultima_execucao: ult.rows[0] || null, em_execucao: emExecucao(),
       config: req.usuario?.admin ? {
-        contas: lerContas().map((c) => c.u), horario: process.env.ROBO_HORARIO || "17:00",
+        contas: lerContas().map((c) => c.u), horario: process.env.ROBO_HORARIO || HORARIO_PADRAO,
         para: process.env.RELATORIO_PARA || "otaviolerio@outlook.com",
         email: process.env.EMAIL_WEBHOOK_URL ? "script do Google" : process.env.GMAIL_USER ? "Gmail SMTP" : null,
         agendamento: !/^(sim|true|1)$/i.test(process.env.ROBO_DESATIVADO || ""),
