@@ -179,7 +179,7 @@ td .v{font-size:12px; font-weight:700; margin-left:6px}
         <details><summary>Histórico de execuções</summary><div class="tbl"><table id="roboHist"></table></div></details>
       </div>
     </section>
-    <div class="panel vazio" id="vazio" hidden><h2>Ainda não há dados das usinas</h2><p class="sub">O robô lê o S-Miles todos os dias às 17:00. Depois de cadastrar as contas no Railway, o administrador pode clicar em "Atualizar agora".</p></div>
+    <div class="panel vazio" id="vazio" hidden><h2>Ainda não há dados das usinas</h2><p class="sub">O robô lê o S-Miles todos os dias às 07:00. Depois de cadastrar as contas no Railway, o administrador pode clicar em "Atualizar agora".</p></div>
     <div class="subtabs" role="tablist" aria-label="Visões do módulo Usinas">
       <a class="subtab" role="tab" href="#performance" id="st-performance" aria-controls="v-performance">Performance das usinas<span class="fonte-tag">Fonte: S-Miles Cloud</span></a>
       <a class="subtab" role="tab" href="#faturas" id="st-faturas" aria-controls="v-faturas">Usina × fatura<span class="fonte-tag">Fonte: faturas Enel/Energisa + S-Miles</span></a>
@@ -248,7 +248,7 @@ td .v{font-size:12px; font-weight:700; margin-left:6px}
         <div class="panel"><h4>Coleta</h4><ul>
           <li>Performance: leitura diária e automática do S-Miles Cloud (Hoymiles), só de consulta. É a única fonte usada para medir as usinas.</li>
           <li>Guarda geração diária e mensal, potência, status dos microinversores e alarmes.</li>
-          <li>O robô roda todos os dias às 17:00 (Brasília), atualiza este painel e envia o relatório dos últimos 7 dias por e-mail.</li></ul></div>
+          <li>O robô roda todos os dias às 07:00 (Brasília), atualiza este painel e envia por e-mail o status de funcionamento das usinas (com ações recomendadas em caso de anomalia) e o relatório dos últimos 7 dias.</li></ul></div>
         <div class="panel"><h4>Análise</h4><ul>
           <li>Produtividade em kWh/kWp, para comparar usinas de tamanhos diferentes.</li>
           <li>Cada usina é comparada com a vizinha da mesma região no mesmo dia. Dia nublado derruba as duas; queda isolada indica defeito.</li><li>Usina sem vizinha monitorada só gera alerta em paradas fortes (abaixo de 25% do esperado).</li>
