@@ -7,7 +7,7 @@
 //
 // Variáveis de ambiente (Railway):
 //   HOYMILES_CONTAS      contas do S-Miles, uma por linha ou separadas por ";"  ->  usuario:senha
-//   ROBO_HORARIO         horário diário em Brasília (padrão 07:00)
+//   ROBO_HORARIO         horário diário em Brasília (padrão 07:35)
 //   RELATORIO_PARA       destinatário(s) do e-mail (padrão otaviolerio@outlook.com)
 //   EMAIL_WEBHOOK_URL    endereço do script do Google que envia pelo Gmail (recomendado no Railway)
 //   EMAIL_WEBHOOK_TOKEN  senha combinada com o script do Google
@@ -20,7 +20,7 @@ import path from "path";
 import { query } from "./db.js";
 
 const TZ = "America/Sao_Paulo";
-export const HORARIO_PADRAO = "07:00";
+export const HORARIO_PADRAO = "07:35";
 const BASES = { 1: "https://euapi.hoymiles.com" };
 const BASE_PADRAO = process.env.HOYMILES_BASE || "https://neapi.hoymiles.com";
 const P_ENERGIA = "/pvm-data/api/0/station/data3/ceqc_a";
